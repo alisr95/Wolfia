@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,24 +17,39 @@
 
 package space.npstr.wolfia.commands.game;
 
+import java.util.List;
+import javax.annotation.Nonnull;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
 import space.npstr.wolfia.commands.GuildCommandContext;
+import space.npstr.wolfia.commands.PublicCommand;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
 import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 
-import javax.annotation.Nonnull;
-
 /**
- * Created by napster on 27.05.17.
- * <p>
- * resend a role PM to a player
+ * Resend a role PM to a player.
  */
-public class RolePmCommand extends BaseCommand {
+@Command
+public class RolePmCommand implements BaseCommand, PublicCommand {
 
-    public RolePmCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public static final String TRIGGER = "rolepm";
+
+    private final GameRegistry gameRegistry;
+
+    public RolePmCommand(GameRegistry gameRegistry) {
+        this.gameRegistry = gameRegistry;
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
+    }
+
+    @Override
+    public List<String> getAliases() {
+        return List.of("rpm");
     }
 
     @Nonnull
@@ -50,7 +65,7 @@ public class RolePmCommand extends BaseCommand {
             return false;
         }
 
-        final Game game = Games.get(context.textChannel);
+        final Game game = this.gameRegistry.get(context.textChannel);
         if (game == null) {
             context.replyWithMention("there is no game going on in here for which I could send you a role pm.");
             return false;

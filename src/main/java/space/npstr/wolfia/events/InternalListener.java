@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,50 +17,51 @@
 
 package space.npstr.wolfia.events;
 
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.events.ReadyEvent;
-import net.dv8tion.jda.core.events.channel.text.TextChannelDeleteEvent;
-import net.dv8tion.jda.core.events.guild.GuildJoinEvent;
-import net.dv8tion.jda.core.events.guild.GuildLeaveEvent;
-import net.dv8tion.jda.core.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.events.ReadyEvent;
+import net.dv8tion.jda.api.events.channel.text.TextChannelDeleteEvent;
+import net.dv8tion.jda.api.events.guild.GuildJoinEvent;
+import net.dv8tion.jda.api.events.guild.GuildLeaveEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
 import space.npstr.wolfia.App;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
 import space.npstr.wolfia.utils.UserFriendlyException;
 import space.npstr.wolfia.utils.discord.Emojis;
-import space.npstr.wolfia.utils.discord.TextchatUtils;
-import space.npstr.wolfia.utils.log.DiscordLogger;
 
 /**
- * Created by napster on 23.07.17.
- * <p>
  * Events listened to in here are used for bot internal, non-game purposes
  */
-public class InternalListener extends ListenerAdapter {
+@Component
+public class InternalListener {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(InternalListener.class);
 
-    @Override
-    public void onReady(final ReadyEvent event) {
-        log.info("Logged in as: " + event.getJDA().getSelfUser().getName());
-        DiscordLogger.getLogger().log("%s `%s` Ready! %s",
-                Emojis.ROCKET, TextchatUtils.berlinTime(), App.VERSION);
+    private final GameRegistry gameRegistry;
+
+    public InternalListener(GameRegistry gameRegistry) {
+        this.gameRegistry = gameRegistry;
     }
 
-    @Override
+    @EventListener
+    public void onReady(final ReadyEvent event) {
+        log.info("{} Ready! Version: {} Logged in as: {}", Emojis.ROCKET, App.VERSION, event.getJDA().getSelfUser().getName());
+    }
+
+    @EventListener
     public void onGuildJoin(final GuildJoinEvent event) {
         final Guild guild = event.getGuild();
-        DiscordLogger.getLogger().log("%s `%s` Joined guild %s with %s users.",
-                Emojis.CHECK, TextchatUtils.berlinTime(), guild.getName(), guild.getMembers().size());
+        log.info("Joined guild {} with {} users.", guild.getName(), guild.getMembers().size());
     }
 
-    @Override
+    @EventListener
     public void onGuildLeave(final GuildLeaveEvent event) {
         final Guild guild = event.getGuild();
 
         int gamesDestroyed = 0;
         //destroy games running in the server that was left
-        for (final Game game : Games.getAll().values()) {
+        for (final Game game : this.gameRegistry.getAll().values()) {
             if (game.getGuildId() == guild.getIdLong()) {
                 try {
                     game.destroy(new UserFriendlyException("Bot was kicked from the server " + guild.getName() + " " + guild.getIdLong()));
@@ -72,21 +73,22 @@ public class InternalListener extends ListenerAdapter {
             }
         }
 
-        DiscordLogger.getLogger().log("%s `%s` Left guild %s with %s users, destroyed **%s** games.",
-                Emojis.X, TextchatUtils.berlinTime(), guild.getName(), guild.getMembers().size(), gamesDestroyed);
+        log.info("Left guild {} with {} users, destroyed {} games.",
+                guild.getName(), guild.getMembers().size(), gamesDestroyed);
     }
 
-    @Override
+    @EventListener
     public void onTextChannelDelete(final TextChannelDeleteEvent event) {
         final long channelId = event.getChannel().getIdLong();
         final long guildId = event.getGuild().getIdLong();
 
-        if (Games.get(channelId) != null) {
-            DiscordLogger.getLogger().log("%s `%s` Destroying game due to deleted channel **#%s** `%s` in guild **%s** `%s`.",
-                    Emojis.BOOM, TextchatUtils.berlinTime(),
+        Game game = this.gameRegistry.get(channelId);
+        if (game != null) {
+            log.info("Destroying game due to deleted channel {} {} in guild {} {}.",
                     event.getChannel().getName(), channelId, event.getGuild().getName(), guildId);
 
-            Games.get(channelId).destroy(new UserFriendlyException("Main game channel `%s` in guild `%s` was deleted", channelId, guildId));
+            game.destroy(new UserFriendlyException("Main game channel `%s` in guild `%s` was deleted",
+                    channelId, guildId));
         }
     }
 }

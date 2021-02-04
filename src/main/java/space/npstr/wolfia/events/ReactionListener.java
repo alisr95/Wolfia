@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,19 +17,16 @@
 
 package space.npstr.wolfia.events;
 
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent;
-import net.dv8tion.jda.core.hooks.ListenerAdapter;
-import space.npstr.wolfia.Wolfia;
-
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.events.message.react.GenericMessageReactionEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import space.npstr.wolfia.Launcher;
 
 /**
- * Created by napster on 18.06.17.
- * <p>
  * A self destructing listener for reactions to a single message
  */
 public class ReactionListener extends ListenerAdapter {
@@ -53,12 +50,12 @@ public class ReactionListener extends ListenerAdapter {
         this.callback = callback;
         this.selfDestructCallback = selfDestructCallback;
 
-        Wolfia.executor.schedule(this::destruct, selfDestructMillis, TimeUnit.MILLISECONDS);
+        Launcher.getBotContext().getExecutor().schedule(this::destruct, selfDestructMillis, TimeUnit.MILLISECONDS);
     }
 
     protected void destruct() {
         //remove the listener
-        Wolfia.removeEventListener(this);
+        Launcher.getBotContext().getShardManager().removeEventListener(this);
         this.selfDestructCallback.accept(null);
     }
 

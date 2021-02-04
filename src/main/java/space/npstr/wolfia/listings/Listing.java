@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,20 +17,19 @@
 
 package space.npstr.wolfia.listings;
 
-import net.dv8tion.jda.core.JDA;
+import java.io.IOException;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.sharding.ShardManager;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import space.npstr.wolfia.Launcher;
-import space.npstr.wolfia.Wolfia;
 
-import javax.annotation.Nonnull;
-import java.io.IOException;
+import static java.util.Objects.requireNonNull;
 
 /**
- * Created by napster on 06.10.17.
- * <p>
  * Template for various bot listing sites
  */
 public abstract class Listing {
@@ -70,7 +69,7 @@ public abstract class Listing {
             return;
         }
 
-        if (this instanceof Carbonitex && !Wolfia.allShardsUp()) {
+        if (this instanceof Carbonitex && !allShardsUp(requireNonNull(jda.getShardManager()))) {
             log.info("Skipping posting stats to Carbonitex since not all shards are up");
             return;
         }
@@ -95,8 +94,9 @@ public abstract class Listing {
                     success = true;
                 } else {
                     //noinspection ConstantConditions
+                    String body = response.body().string();
                     log.info("Failed to post stats to {} on attempt {}: code {}, body:\n{}",
-                            this.name, attempt, response.code(), response.body().string());
+                            this.name, attempt, response.code(), body);
                 }
             } catch (final IOException e) {
                 log.info("Failed to post stats to {} on attempt {}", this.name, attempt, e);
@@ -116,5 +116,22 @@ public abstract class Listing {
     @Override
     public boolean equals(final Object obj) {
         return obj instanceof Listing && this.name.equals(((Listing) obj).name);
+    }
+
+    @Override
+    public int hashCode() {
+        return this.name.hashCode();
+    }
+
+    private boolean allShardsUp(ShardManager shardManager) {
+        if (shardManager.getShards().size() < shardManager.getShardsTotal()) {
+            return false;
+        }
+        for (final JDA jda : shardManager.getShards()) {
+            if (jda.getStatus() != JDA.Status.CONNECTED) {
+                return false;
+            }
+        }
+        return true;
     }
 }

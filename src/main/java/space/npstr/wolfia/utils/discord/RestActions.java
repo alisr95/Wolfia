@@ -1,41 +1,47 @@
+/*
+ * Copyright (C) 2016-2020 the original author or authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package space.npstr.wolfia.utils.discord;
 
-import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.MessageBuilder;
-import net.dv8tion.jda.core.Permission;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.entities.MessageChannel;
-import net.dv8tion.jda.core.entities.MessageEmbed;
-import net.dv8tion.jda.core.entities.TextChannel;
-import net.dv8tion.jda.core.entities.User;
-import net.dv8tion.jda.core.exceptions.ErrorResponseException;
-import net.dv8tion.jda.core.exceptions.InsufficientPermissionException;
-import net.dv8tion.jda.core.requests.ErrorResponse;
-import space.npstr.wolfia.utils.log.LogTheStackException;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import net.dv8tion.jda.api.MessageBuilder;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.MessageChannel;
+import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.exceptions.ErrorResponseException;
+import net.dv8tion.jda.api.exceptions.InsufficientPermissionException;
+import net.dv8tion.jda.api.requests.ErrorResponse;
+import space.npstr.wolfia.utils.log.LogTheStackException;
 
 /**
- * Created by napster on 10.09.17.
- * <p>
  * Everything related to sending RestActions
  * Copy pastad and adjusted from FredBoat where I wrote this for
  */
 public class RestActions {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RestActions.class);
-
-    //this is needed for when we absolutely don't care about a rest action failing (use this only after good consideration!)
-    // because if we pass null for a failure handler to JDA it uses a default handler that results in a warning/error level log
-    public static final Consumer<Throwable> NOOP_THROWABLE_HANDLER = __ -> {
-    };
 
     //use this to schedule rest actions whenever queueAfter() or similar JDA methods would be used
     // this makes it way easier to track stats + handle failures of such delayed RestActions
@@ -44,36 +50,15 @@ public class RestActions {
             runnable -> new Thread(runnable, "rest-actions-scheduler"));
 
 
-    // ********************************************************************************
-    //       Thread local handling and providing of Messages and Embeds builders
-    // ********************************************************************************
-
-    //instead of creating hundreds of MessageBuilder and EmbedBuilder objects we're going to reuse the existing ones, on
-    // a per-thread scope
-    // this makes sense since the vast majority of message processing in the main JDA threads
-
-    private static final ThreadLocal<MessageBuilder> threadLocalMessageBuilder = ThreadLocal.withInitial(MessageBuilder::new);
-    private static final ThreadLocal<EmbedBuilder> threadLocalEmbedBuilder = ThreadLocal.withInitial(EmbedBuilder::new);
-
-    @Nonnull
-    public static MessageBuilder getMessageBuilder() {
-        return threadLocalMessageBuilder.get().clear();
-    }
-
-    @Nonnull
-    public static EmbedBuilder getEmbedBuilder() {
-        return threadLocalEmbedBuilder.get().clear();
-    }
-
     //May not be an empty string, as MessageBuilder#build() will throw an exception
     @Nonnull
     public static Message from(final String string) {
-        return getMessageBuilder().append(string).build();
+        return new MessageBuilder().append(string).build();
     }
 
     @Nonnull
     public static Message from(final MessageEmbed embed) {
-        return getMessageBuilder().setEmbed(embed).build();
+        return new MessageBuilder().setEmbed(embed).build();
     }
 
 
@@ -109,27 +94,6 @@ public class RestActions {
                 message,
                 onSuccess,
                 null
-        );
-    }
-
-    // Message
-    public static void sendMessage(@Nonnull final MessageChannel channel, @Nonnull final Message message) {
-        sendMessage0(
-                channel,
-                message,
-                null,
-                null
-        );
-    }
-
-    // Embed
-    public static void sendMessage(@Nonnull final MessageChannel channel, @Nonnull final MessageEmbed embed,
-                                   @Nullable final Consumer<Message> onSuccess, @Nullable final Consumer<Throwable> onFail) {
-        sendMessage0(
-                channel,
-                from(embed),
-                onSuccess,
-                onFail
         );
     }
 
@@ -187,12 +151,6 @@ public class RestActions {
     }
 
     // private
-    public static void sendPrivateMessage(@Nonnull final User user, @Nonnull final MessageEmbed embed,
-                                          @Nullable final Consumer<Message> onSuccess, @Nonnull final Consumer<Throwable> onFail) {
-        sendPrivateMessage(user, from(embed), onSuccess, onFail);
-    }
-
-    // private
     public static void sendPrivateMessage(@Nonnull final User user, @Nonnull final String content,
                                           @Nullable final Consumer<Message> onSuccess, @Nonnull final Consumer<Throwable> onFail) {
         sendPrivateMessage(user, from(content), onSuccess, onFail);
@@ -204,11 +162,7 @@ public class RestActions {
     public static void sendPrivateMessage(@Nonnull final User user, @Nonnull final Message message,
                                           @Nullable final Consumer<Message> onSuccess, @Nonnull final Consumer<Throwable> onFail) {
         user.openPrivateChannel().queue(
-                privateChannel -> {
-//                    Metrics.successfulRestActions.labels("openPrivateChannel").inc();
-                    sendMessage(privateChannel, message, onSuccess, onFail);
-
-                },
+                privateChannel -> sendMessage(privateChannel, message, onSuccess, onFail),
                 onFail
         );
     }
@@ -217,44 +171,11 @@ public class RestActions {
     //                            Message editing methods
     // ********************************************************************************
 
-    /**
-     * @param oldMessage
-     *         The message to be edited
-     * @param newMessage
-     *         The message to be set
-     * @param onSuccess
-     *         Optional success handler
-     * @param onFail
-     *         Optional exception handler
-     */
-    public static void editMessage(@Nonnull final Message oldMessage, @Nonnull final Message newMessage,
-                                   @Nullable final Consumer<Message> onSuccess, @Nullable final Consumer<Throwable> onFail) {
-        editMessage0(
-                oldMessage.getChannel(),
-                oldMessage.getIdLong(),
-                newMessage,
-                onSuccess,
-                onFail
-        );
-    }
-
-    public static void editMessage(@Nonnull final Message oldMessage, @Nonnull final Message newMessage) {
-        editMessage0(
-                oldMessage.getChannel(),
-                oldMessage.getIdLong(),
-                newMessage,
-                null,
-                null
-        );
-    }
-
     public static void editMessage(@Nonnull final Message oldMessage, @Nonnull final String newContent) {
         editMessage0(
                 oldMessage.getChannel(),
                 oldMessage.getIdLong(),
-                from(newContent),
-                null,
-                null
+                from(newContent)
         );
     }
 
@@ -262,41 +183,7 @@ public class RestActions {
         editMessage0(
                 oldMessage.getChannel(),
                 oldMessage.getIdLong(),
-                from(newEmbed),
-                null,
-                null
-        );
-    }
-
-
-    public static void editMessage(@Nonnull final MessageChannel channel, final long oldMessageId, @Nonnull final Message newMessage,
-                                   @Nullable final Consumer<Message> onSuccess, @Nullable final Consumer<Throwable> onFail) {
-        editMessage0(
-                channel,
-                oldMessageId,
-                newMessage,
-                onSuccess,
-                onFail
-        );
-    }
-
-    public static void editMessage(@Nonnull final MessageChannel channel, final long oldMessageId, @Nonnull final Message newMessage) {
-        editMessage0(
-                channel,
-                oldMessageId,
-                newMessage,
-                null,
-                null
-        );
-    }
-
-    public static void editMessage(@Nonnull final MessageChannel channel, final long oldMessageId, @Nonnull final String newContent) {
-        editMessage0(
-                channel,
-                oldMessageId,
-                from(newContent),
-                null,
-                null
+                from(newEmbed)
         );
     }
 
@@ -307,39 +194,8 @@ public class RestActions {
     public static void sendTyping(@Nonnull final MessageChannel channel) {
         try {
             channel.sendTyping().queue(
-//                    __ -> Metrics.successfulRestActions.labels("sendTyping").inc(),
                     null,
                     getJdaRestActionFailureHandler("Could not send typing event in channel " + channel.getId())
-            );
-        } catch (final InsufficientPermissionException e) {
-            handleInsufficientPermissionsException(channel, e);
-        }
-    }
-
-    //make sure that all the messages are from the channel you provide
-    public static void deleteMessages(@Nonnull final TextChannel channel, @Nonnull final Collection<Message> messages) {
-        if (!messages.isEmpty()) {
-            try {
-                channel.deleteMessages(messages).queue(
-//                        __ -> Metrics.successfulRestActions.labels("bulkDeleteMessages").inc(),
-                        null,
-                        getJdaRestActionFailureHandler(String.format("Could not bulk delete %s messages in channel %s",
-                                messages.size(), channel.getId()))
-                );
-            } catch (final InsufficientPermissionException e) {
-                handleInsufficientPermissionsException(channel, e);
-            }
-        }
-    }
-
-    public static void deleteMessageById(@Nonnull final MessageChannel channel, final long messageId) {
-        try {
-            channel.getMessageById(messageId).queue(
-                    message -> {
-//                        Metrics.successfulRestActions.labels("getMessageById").inc();
-                        deleteMessage(message);
-                    },
-                    NOOP_THROWABLE_HANDLER //prevent logging an error if that message could not be found in the first place
             );
         } catch (final InsufficientPermissionException e) {
             handleInsufficientPermissionsException(channel, e);
@@ -351,20 +207,14 @@ public class RestActions {
     public static void deleteMessage(@Nonnull final Message message) {
         try {
             message.delete().queue(
-//                    __ -> Metrics.successfulRestActions.labels("deleteMessage").inc(),
                     null,
-                    getJdaRestActionFailureHandler(String.format("Could not delete message %s in channel %s with content\n%s",
+                    getJdaRestActionFailureHandler(String.format("Could not delete message %s in channel %s with content%n%s",
                             message.getId(), message.getChannel().getId(), message.getContentRaw()),
                             ErrorResponse.UNKNOWN_MESSAGE) //user deleted their message, dun care
             );
         } catch (final InsufficientPermissionException e) {
             handleInsufficientPermissionsException(message.getChannel(), e);
         }
-    }
-
-    @Nonnull
-    public static EmbedBuilder addFooter(@Nonnull final EmbedBuilder eb, @Nonnull final Member author) {
-        return eb.setFooter(author.getEffectiveName(), author.getUser().getAvatarUrl());
     }
 
     // ********************************************************************************
@@ -375,7 +225,6 @@ public class RestActions {
     private static void sendMessage0(@Nonnull final MessageChannel channel, @Nonnull final Message message,
                                      @Nullable final Consumer<Message> onSuccess, @Nullable final Consumer<Throwable> onFail) {
         final Consumer<Message> successWrapper = m -> {
-//            Metrics.successfulRestActions.labels("sendMessage").inc();
             if (onSuccess != null) {
                 onSuccess.accept(m);
             }
@@ -384,7 +233,7 @@ public class RestActions {
             if (onFail != null) {
                 onFail.accept(t);
             } else {
-                final String info = String.format("Could not sent message\n%s\nwith %s embeds to channel %s in guild %s",
+                final String info = String.format("Could not sent message%n%s%nwith %s embeds to channel %s in guild %s",
                         message.getContentRaw(), message.getEmbeds().size(), channel.getId(),
                         (channel instanceof TextChannel) ? ((TextChannel) channel).getGuild().getIdLong() : "private");
                 getJdaRestActionFailureHandler(info).accept(t);
@@ -408,32 +257,20 @@ public class RestActions {
     }
 
     //class internal editing method
-    private static void editMessage0(@Nonnull final MessageChannel channel, final long oldMessageId, @Nonnull final Message newMessage,
-                                     @Nullable final Consumer<Message> onSuccess, @Nullable final Consumer<Throwable> onFail) {
-        final Consumer<Message> successWrapper = m -> {
-//            Metrics.successfulRestActions.labels("editMessage").inc();
-            if (onSuccess != null) {
-                onSuccess.accept(m);
-            }
-        };
+    private static void editMessage0(@Nonnull final MessageChannel channel, final long oldMessageId,
+                                     @Nonnull final Message newMessage) {
+
         final Consumer<Throwable> failureWrapper = t -> {
-            if (onFail != null) {
-                onFail.accept(t);
-            } else {
-                final String info = String.format("Could not edit message %s in channel %s in guild %s with new content %s and %s embeds",
-                        oldMessageId, channel.getId(),
-                        (channel instanceof TextChannel) ? ((TextChannel) channel).getGuild().getIdLong() : "null",
-                        newMessage.getContentRaw(), newMessage.getEmbeds().size());
-                getJdaRestActionFailureHandler(info).accept(t);
-            }
+            final String info = String.format("Could not edit message %s in channel %s in guild %s with new content %s and %s embeds",
+                    oldMessageId, channel.getId(),
+                    (channel instanceof TextChannel) ? ((TextChannel) channel).getGuild().getIdLong() : "null",
+                    newMessage.getContentRaw(), newMessage.getEmbeds().size());
+            getJdaRestActionFailureHandler(info).accept(t);
         };
 
         try {
-            channel.editMessageById(oldMessageId, newMessage).queue(successWrapper, failureWrapper);
+            channel.editMessageById(oldMessageId, newMessage).queue(null, failureWrapper);
         } catch (final InsufficientPermissionException e) {
-            if (onFail != null) {
-                onFail.accept(e);
-            }
             handleInsufficientPermissionsException(channel, e);
         }
     }
@@ -459,7 +296,6 @@ public class RestActions {
             ex.initCause(t);
             if (t instanceof ErrorResponseException) {
                 final ErrorResponseException e = (ErrorResponseException) t;
-//                Metrics.failedRestActions.labels(Integer.toString(e.getErrorCode())).inc();
                 if (Arrays.asList(ignored).contains(e.getErrorResponse())
                         || e.getErrorCode() == -1 //socket timeout, fuck those
                         ) {
@@ -469,4 +305,6 @@ public class RestActions {
             log.error("{}\n{}", info, t.getMessage(), ex);
         };
     }
+
+    private RestActions() {}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,24 +17,31 @@
 
 package space.npstr.wolfia.commands.debug;
 
-import space.npstr.wolfia.Wolfia;
+import javax.annotation.Nonnull;
+import space.npstr.wolfia.ShutdownHandler;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.IOwnerRestricted;
-import space.npstr.wolfia.game.definitions.Games;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 
-import javax.annotation.Nonnull;
+@Command
+public class RestartCommand implements BaseCommand {
 
-/**
- * Created by napster on 28.05.17.
- */
-public class RestartCommand extends BaseCommand implements IOwnerRestricted {
 
-    public RestartCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
-    }
+    private final GameRegistry gameRegistry;
+    private final ShutdownHandler shutdownHandler;
 
     private boolean reminded = false;
+
+    public RestartCommand(GameRegistry gameRegistry, ShutdownHandler shutdownHandler) {
+        this.gameRegistry = gameRegistry;
+        this.shutdownHandler = shutdownHandler;
+    }
+
+    @Override
+    public String getTrigger() {
+        return "restart";
+    }
 
     @Nonnull
     @Override
@@ -45,9 +52,9 @@ public class RestartCommand extends BaseCommand implements IOwnerRestricted {
     @Override
     public boolean execute(@Nonnull final CommandContext context) {
 
-        if (Wolfia.isShuttingDown()) {
+        if (this.shutdownHandler.isShuttingDown()) {
             context.replyWithName(String.format("restart has been queued already! **%s** games still running.",
-                    Games.getRunningGamesCount()));
+                    this.gameRegistry.getRunningGamesCount()));
             return false;
         }
 
@@ -63,8 +70,9 @@ public class RestartCommand extends BaseCommand implements IOwnerRestricted {
         }
 
         final String message = String.format("**%s** games are still running. Will restart as soon as they are over.",
-                Games.getRunningGamesCount());
-        context.replyWithMention(message, __ -> new Thread(() -> Wolfia.shutdown(Wolfia.EXIT_CODE_RESTART), "shutdown-thread").start());
+                this.gameRegistry.getRunningGamesCount());
+        Runnable restart = () -> this.shutdownHandler.shutdown(ShutdownHandler.EXIT_CODE_RESTART);
+        context.replyWithMention(message, __ -> new Thread(restart, "shutdown-thread").start());
         return true;
     }
 }

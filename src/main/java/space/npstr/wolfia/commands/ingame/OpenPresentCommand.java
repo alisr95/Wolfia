@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,23 +17,36 @@
 
 package space.npstr.wolfia.commands.ingame;
 
-import space.npstr.wolfia.commands.CommRegistry;
+import java.util.List;
+import javax.annotation.Nonnull;
 import space.npstr.wolfia.commands.CommandContext;
 import space.npstr.wolfia.commands.GameCommand;
+import space.npstr.wolfia.commands.util.HelpCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
 import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 
-import javax.annotation.Nonnull;
-
-/**
- * Created by napster on 14.12.17.
- */
+@Command
 public class OpenPresentCommand extends GameCommand {
 
-    public OpenPresentCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public static final String TRIGGER = "openpresent";
+    public static final String ALIAS = "op";
+
+    public OpenPresentCommand(GameRegistry gameRegistry) {
+        super(gameRegistry);
+    }
+
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
+    }
+
+    @Override
+    public List<String> getAliases() {
+        return List.of("open", ALIAS);
     }
 
     @Nonnull
@@ -50,7 +63,7 @@ public class OpenPresentCommand extends GameCommand {
         //todo handle a player being part of multiple games properly
         boolean issued = false;
         boolean success = false;
-        for (final Game g : Games.getAll().values()) {
+        for (final Game g : this.gameRegistry.getAll().values()) {
             if (g.isUserPlaying(commandContext.invoker)) {
                 if (g.issueCommand(commandContext)) {
                     success = true;
@@ -60,7 +73,7 @@ public class OpenPresentCommand extends GameCommand {
         }
         if (!issued) {
             commandContext.replyWithMention(String.format("you aren't playing in any game currently. Say `%s` to get started!",
-                    WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_HELP));
+                    WolfiaConfig.DEFAULT_PREFIX + HelpCommand.TRIGGER));
             return false;
         }
         return success;

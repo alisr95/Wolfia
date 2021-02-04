@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2019 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import space.npstr.wolfia.system.metrics.MetricsRegistry;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -49,8 +50,9 @@ public class MetricsEndpoint extends BaseEndpoint {
 
     private final CollectorRegistry registry;
 
-    public MetricsEndpoint() {
-        this.registry = CollectorRegistry.defaultRegistry;
+    //dependency on the registry is generally a good idea due to spring lazy loading
+    public MetricsEndpoint(MetricsRegistry metricsRegistry) {
+        this.registry = metricsRegistry.getRegistry();
     }
 
     @GetMapping(produces = TextFormat.CONTENT_TYPE_004)
@@ -65,6 +67,7 @@ public class MetricsEndpoint extends BaseEndpoint {
         });
     }
 
+    @SuppressWarnings("squid:S3752")
     @RequestMapping("**")
     public CompletionStage<ResponseEntity<String>> catchAll(HttpServletRequest request) {
         return super.logAndCatchAll(request);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,17 +17,15 @@
 
 package space.npstr.wolfia.game.tools;
 
-import javax.annotation.Nonnull;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nonnull;
 
 /**
- * Created by napster on 06.08.17.
- * <p>
  * This executor logs exceptions of its tasks.
  */
 public class ExceptionLoggingExecutor extends ScheduledThreadPoolExecutor {
@@ -100,8 +98,8 @@ public class ExceptionLoggingExecutor extends ScheduledThreadPoolExecutor {
         return () -> {
             try {
                 runnable.run();
-            } catch (final Throwable t) {
-                log.error("Runnable encountered an exception: {}", t.getMessage(), t);
+            } catch (final Exception e) {
+                log.error("Runnable encountered an exception: {}", e.getMessage(), e);
             }
         };
     }
@@ -111,8 +109,8 @@ public class ExceptionLoggingExecutor extends ScheduledThreadPoolExecutor {
         return () -> {
             try {
                 return callable.call();
-            } catch (final Throwable t) {
-                log.error("Callable encountered an exception: {}", t.getMessage(), t);
+            } catch (final Exception e) {
+                log.error("Callable encountered an exception: {}", e.getMessage(), e);
                 return null;
             }
         };

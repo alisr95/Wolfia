@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,42 +17,7 @@
 
 package space.npstr.wolfia.game;
 
-import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.Permission;
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.entities.Role;
-import net.dv8tion.jda.core.entities.TextChannel;
-import net.dv8tion.jda.core.entities.User;
-import net.dv8tion.jda.core.exceptions.PermissionException;
-import space.npstr.sqlsauce.DatabaseException;
-import space.npstr.wolfia.App;
-import space.npstr.wolfia.Launcher;
-import space.npstr.wolfia.Wolfia;
-import space.npstr.wolfia.commands.CommRegistry;
-import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.config.properties.WolfiaConfig;
-import space.npstr.wolfia.db.entities.ChannelSettings;
-import space.npstr.wolfia.db.entities.PrivateGuild;
-import space.npstr.wolfia.db.entities.stats.ActionStats;
-import space.npstr.wolfia.db.entities.stats.GameStats;
-import space.npstr.wolfia.db.entities.stats.PlayerStats;
-import space.npstr.wolfia.game.definitions.Actions;
-import space.npstr.wolfia.game.definitions.Alignments;
-import space.npstr.wolfia.game.definitions.Games;
-import space.npstr.wolfia.game.definitions.Scope;
-import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
-import space.npstr.wolfia.game.tools.ExceptionLoggingExecutor;
-import space.npstr.wolfia.game.tools.NiceEmbedBuilder;
-import space.npstr.wolfia.utils.UserFriendlyException;
-import space.npstr.wolfia.utils.discord.Emojis;
-import space.npstr.wolfia.utils.discord.RestActions;
-import space.npstr.wolfia.utils.discord.RoleAndPermissionUtils;
-import space.npstr.wolfia.utils.discord.TextchatUtils;
-import space.npstr.wolfia.utils.log.DiscordLogger;
-
-import javax.annotation.Nonnull;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -60,16 +25,54 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.exceptions.PermissionException;
+import net.dv8tion.jda.api.sharding.ShardManager;
+import space.npstr.wolfia.App;
+import space.npstr.wolfia.Launcher;
+import space.npstr.wolfia.commands.CommandContext;
+import space.npstr.wolfia.commands.util.InviteCommand;
+import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.db.type.OAuth2Scope;
+import space.npstr.wolfia.domain.oauth2.OAuth2Service;
+import space.npstr.wolfia.domain.room.ManagedPrivateRoom;
+import space.npstr.wolfia.domain.room.PrivateRoomQueue;
+import space.npstr.wolfia.domain.settings.ChannelSettingsCommand;
+import space.npstr.wolfia.domain.setup.StatusCommand;
+import space.npstr.wolfia.domain.stats.ActionStats;
+import space.npstr.wolfia.domain.stats.GameStats;
+import space.npstr.wolfia.domain.stats.PlayerStats;
+import space.npstr.wolfia.domain.stats.ReplayCommand;
+import space.npstr.wolfia.game.definitions.Actions;
+import space.npstr.wolfia.game.definitions.Alignments;
+import space.npstr.wolfia.game.definitions.Games;
+import space.npstr.wolfia.game.definitions.Scope;
+import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
+import space.npstr.wolfia.game.tools.ExceptionLoggingExecutor;
+import space.npstr.wolfia.game.tools.NiceEmbedBuilder;
+import space.npstr.wolfia.system.metrics.MetricsRegistry;
+import space.npstr.wolfia.utils.UserFriendlyException;
+import space.npstr.wolfia.utils.discord.RestActions;
+import space.npstr.wolfia.utils.discord.RoleAndPermissionUtils;
+import space.npstr.wolfia.utils.discord.TextchatUtils;
+import space.npstr.wolfia.utils.log.LogTheStackException;
 
 /**
- * Created by npstr on 14.09.2016
- * <p>
  * Provides some common methods for all games, like keeping players and queries about the players
  * <p>
  * creating these should be lightweight and not cause any permanent "damage"
@@ -87,23 +90,32 @@ public abstract class Game {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Game.class);
 
     //to be used to execute tasks for each game
+    //each task scheduled on it needs to check of the game is still running once it continues execution to avoid race
+    //conditions in games ending outside of main loop (shots, bombs, forced destroy by bot admin, etc)
     protected final ExceptionLoggingExecutor executor = new ExceptionLoggingExecutor(10,
             r -> new Thread(r, "game-in-channel-" + Game.this.getChannelId() + "-executor-thread"));
 
     //commonly used fields
     protected long channelId = -1;
     protected long guildId = -1;
+    protected final long selfUserId;
     protected GameInfo.GameMode mode;
     protected final List<Player> players = new ArrayList<>();
     protected volatile boolean running = false;
     protected long accessRoleId;
-    protected PrivateGuild wolfChat = null;
+    protected ManagedPrivateRoom wolfChat = null;
     protected final Set<Integer> hasDayEnded = new HashSet<>();
 
     //stats keeping fields
     protected GameStats gameStats = null;
     protected final Map<Long, PlayerStats> playersStats = new HashMap<>();
     protected final AtomicInteger actionOrder = new AtomicInteger();
+
+    protected Game() {
+        this.selfUserId = Launcher.getBotContext().getShardManager().getShards().stream().findAny()
+                .map(shard -> shard.getSelfUser().getIdLong())
+                .orElseThrow();
+    }
 
 
     /**
@@ -117,11 +129,11 @@ public abstract class Game {
         return this.guildId;
     }
 
-    public long getPrivateGuildId() {
+    public long getPrivateRoomGuildId() {
         if (this.wolfChat == null)
             return -1;
         else {
-            return this.wolfChat.getId();
+            return this.wolfChat.getGuildId();
         }
     }
 
@@ -129,29 +141,16 @@ public abstract class Game {
      * @return the role pm of a user
      */
     @Nonnull
-    public String getRolePm(final long userId) throws IllegalGameStateException {
-        return getPlayer(userId).getRolePm();
-    }
-
-    @Nonnull
-    public String getRolePm(@Nonnull final User user) throws IllegalGameStateException {
-        return getRolePm(user.getIdLong());
-    }
-
-    @Nonnull
     public String getRolePm(@Nonnull final Member member) throws IllegalGameStateException {
-        return getRolePm(member.getUser());
+        return getPlayer(member.getUser().getIdLong()).getRolePm();
     }
 
     /**
      * @return true if the user is playing in this game (dead or alive), false if not
      */
-    public boolean isUserPlaying(final long userId) {
-        return this.players.stream().anyMatch(p -> p.userId == userId);
-    }
-
     public boolean isUserPlaying(@Nonnull final User user) {
-        return isUserPlaying(user.getIdLong());
+        long userId = user.getIdLong();
+        return this.players.stream().anyMatch(p -> p.userId == userId);
     }
 
     public boolean isUserPlaying(@Nonnull final Member member) {
@@ -194,7 +193,7 @@ public abstract class Game {
      */
     @Nonnull
     protected TextChannel fetchGameChannel() {
-        return Wolfia.fetchTextChannel(this.channelId);
+        return fetchTextChannel(this.channelId);
     }
 
     /**
@@ -203,12 +202,7 @@ public abstract class Game {
      */
     @Nonnull
     protected TextChannel fetchBaddieChannel() {
-        return Wolfia.fetchTextChannel(this.wolfChat.getChannelId());
-    }
-
-
-    public boolean isLiving(final Member member) {
-        return isLiving(member.getUser());
+        return fetchTextChannel(this.wolfChat.getChannelId());
     }
 
     public boolean isLiving(final User user) {
@@ -237,20 +231,6 @@ public abstract class Game {
     @Nonnull
     public Player getPlayer(@Nonnull final User user) throws IllegalGameStateException {
         return getPlayer(user.getIdLong());
-    }
-
-    @Nonnull
-    public Player getPlayer(@Nonnull final Member member) throws IllegalGameStateException {
-        return getPlayer(member.getUser());
-    }
-
-    protected Player getPlayerByNumber(final int number) throws IllegalGameStateException {
-        for (final Player p : this.players) {
-            if (p.number == number) {
-                return p;
-            }
-        }
-        throw new IllegalGameStateException("Requested player number " + number + " is not in the player list");
     }
 
     protected Set<Player> getVillagers() {
@@ -366,12 +346,11 @@ public abstract class Game {
      * @throws IllegalArgumentException
      *         if any of the provided arguments fail the checks
      */
-    protected void doArgumentChecksAndSet(final long channelId, final GameInfo.GameMode mode, final Set<Long> innedPlayers)
-            throws IllegalArgumentException {
+    protected void doArgumentChecksAndSet(final long channelId, final GameInfo.GameMode mode, final Set<Long> innedPlayers) {
         if (this.running) {
             throw new IllegalStateException("Cannot start a game that is running already");
         }
-        final TextChannel channel = Wolfia.getTextChannelById(channelId);
+        final TextChannel channel = Launcher.getBotContext().getShardManager().getTextChannelById(channelId);
         if (channelId <= 0 || channel == null) {
             throw new IllegalArgumentException(String.format(
                     "Cannot start a game with invalid/no channel (channelId: %s) set.", channelId)
@@ -388,7 +367,7 @@ public abstract class Game {
 
         if (!Games.getInfo(this).isAcceptablePlayerCount(innedPlayers.size(), mode)) {
             throw new IllegalArgumentException(String.format("There aren't enough (or too many) players signed up! " +
-                    "Please use `%s` for more information", WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_STATUS));
+                    "Please use `%s` for more information", WolfiaConfig.DEFAULT_PREFIX + StatusCommand.TRIGGER));
         }
     }
 
@@ -405,8 +384,7 @@ public abstract class Game {
      * @throws UserFriendlyException
      *         if the bot is missing permissions to run the game in the channel
      */
-    protected void doPermissionCheckAndPrepareChannel(final boolean moderated)
-            throws UserFriendlyException, DatabaseException {
+    protected void doPermissionCheckAndPrepareChannel(final boolean moderated) {
         final TextChannel gameChannel = fetchGameChannel();
         final Guild g = gameChannel.getGuild();
 
@@ -416,13 +394,10 @@ public abstract class Game {
 
             if (scope == Scope.CHANNEL) {
                 toAcquireInChannelScope.add(permission);
-            } else if (scope == Scope.GUILD) {
-                //todo lets not worry about things we arent even using currently and possibly never will
-            } else {
-                //todo
             }
+            //lets not worry about things we arent even using currently and possibly never will
         });
-        RoleAndPermissionUtils.acquireChannelPermissions(gameChannel, toAcquireInChannelScope.toArray(new Permission[toAcquireInChannelScope.size()]));
+        RoleAndPermissionUtils.acquireChannelPermissions(gameChannel, toAcquireInChannelScope.toArray(new Permission[0]));
 
         if (moderated) {
             //is this a non-public channel, and if yes, has an existing access role been set?
@@ -431,7 +406,8 @@ public abstract class Game {
             if (isChannelPublic) {
                 this.accessRoleId = g.getIdLong(); //public role / @everyone, guaranteed to exist
             } else {
-                this.accessRoleId = Launcher.getBotContext().getDatabase().getWrapper().getOrCreate(ChannelSettings.key(this.channelId)).getAccessRoleId();
+                this.accessRoleId = Launcher.getBotContext().getChannelSettingsService()
+                        .channel(this.channelId).getOrDefault().getAccessRoleId().orElse(0L);
                 final Role accessRole = g.getRoleById(this.accessRoleId);
                 if (accessRole == null) {
                     throw new UserFriendlyException(String.format(
@@ -440,7 +416,7 @@ public abstract class Game {
                                     " Talk to an Admin/Moderator of your server to fix this or set the access role up with `%s`." +
                                     " Please refer to the documentation under %s",
                             Permission.MESSAGE_WRITE.getName(), Permission.MESSAGE_READ.getName(),
-                            WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_CHANNELSETTINGS, App.DOCS_LINK
+                            WolfiaConfig.DEFAULT_PREFIX + ChannelSettingsCommand.TRIGGER, App.DOCS_LINK
                     ));
                 }
                 if (!accessRole.hasPermission(gameChannel, Permission.MESSAGE_WRITE, Permission.MESSAGE_READ)) {
@@ -471,7 +447,7 @@ public abstract class Game {
                 throw new UserFriendlyException(String.format(
                         "The bot is missing the permission `%s` to run the selected game and mode in this channel.",
                         e.getPermission().getName()
-                ), e);
+                ));
             }
         }
     }
@@ -504,22 +480,21 @@ public abstract class Game {
         }
     }
 
-    //todo there seems to be an API for bots creating their own guilds? totally should use that instead
-    protected PrivateGuild allocatePrivateGuild() throws UserFriendlyException {
-        PrivateGuild pg = Wolfia.AVAILABLE_PRIVATE_GUILD_QUEUE.poll();
-        if (pg == null) {
-            RestActions.sendMessage(fetchGameChannel(),
-                    "Acquiring a private server for the wolves...this may take a while.");
-            log.error("Ran out of free private guilds. Please add moar.");
-            try { //oh yeah...we are waiting till infinity if necessary
-                pg = Wolfia.AVAILABLE_PRIVATE_GUILD_QUEUE.take();
-            } catch (final InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Interrupted while waiting for a private server.");
-                throw new UserFriendlyException("Could not allocate a private server.");
-            }
-        }
-        return pg;
+    protected ManagedPrivateRoom allocatePrivateRoom() {
+        PrivateRoomQueue privateRoomQueue = Launcher.getBotContext().getPrivateRoomQueue();
+        return privateRoomQueue.poll()
+                .orElseGet(() -> {
+                    RestActions.sendMessage(fetchGameChannel(),
+                            "Acquiring a private server for the wolves...this may take a while.");
+                    log.error("Ran out of free private guilds. Please add moar.");
+                    try { //oh yeah...we are waiting till infinity if necessary
+                        return privateRoomQueue.take();
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.error("Interrupted while waiting for a private server.");
+                        throw new UserFriendlyException("Could not allocate a private server.");
+                    }
+                });
     }
 
     /**
@@ -528,7 +503,7 @@ public abstract class Game {
      * @throws PermissionException
      *         if the bot is missing permissions to edit permission overrides for members and roles
      */
-    protected void prepareChannel() throws PermissionException {
+    protected void prepareChannel() {
         final TextChannel gameChannel = fetchGameChannel();
         final Guild g = gameChannel.getGuild();
 
@@ -550,11 +525,10 @@ public abstract class Game {
      * @param complete
      *         optionally set to true to complete these operations before returning
      */
-    @SuppressWarnings("unchecked")
     //revert whatever prepareChannel() did in reverse order
     public void resetRolesAndPermissions(final boolean... complete) {
 
-        final TextChannel channel = Wolfia.getTextChannelById(this.channelId);
+        final TextChannel channel = Launcher.getBotContext().getShardManager().getTextChannelById(this.channelId);
         if (channel == null) {
             //we probably left the guild
             log.warn("Could not find channel {} to reset roles and permissions in there", this.channelId);
@@ -562,7 +536,7 @@ public abstract class Game {
         }
         final Guild g = channel.getGuild();
         final List<Permission> missingPermissions = new ArrayList<>();
-        final List<Future> toComplete = new ArrayList<>();
+        final List<Future<?>> toComplete = new ArrayList<>();
 
         //reset permission override for the players
         try {
@@ -585,19 +559,23 @@ public abstract class Game {
             missingPermissions.add(e.getPermission());
         }
 
-        if (missingPermissions.size() > 0) {
+        if (!missingPermissions.isEmpty()) {
             RestActions.sendMessage(channel,
                     String.format("Tried to clean up channel, but was missing the following permissions: `%s`",
-                            String.join("`, `",
-                                    missingPermissions.stream().map(Permission::getName).distinct().collect(Collectors.toList())
-                            )));
+                            missingPermissions.stream()
+                                    .map(Permission::getName)
+                                    .distinct()
+                                    .collect(Collectors.joining("`, `"))));
         }
 
         if (complete.length > 0 && complete[0]) {
-            for (final Future f : toComplete) {
+            for (final Future<?> f : toComplete) {
                 try {
                     f.get();
-                } catch (final InterruptedException | ExecutionException ignored) {
+                } catch (final InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                } catch (final ExecutionException ignored) {
+                    // ignored
                 }
             }
         }
@@ -615,8 +593,8 @@ public abstract class Game {
                 //dont really care about this one, its fine if usage has been stopped already
             }
         }
-        this.executor.shutdownNow();
         resetRolesAndPermissions(true);
+        this.executor.shutdown(); //dont use shutdownNow() as that might kill the thread executing this line of code
     }
 
     //public for eval usage
@@ -630,8 +608,8 @@ public abstract class Game {
             log.error(logMessage, reason);
         }
         cleanUp();
-        Games.remove(this);
-        final TextChannel channel = Wolfia.getTextChannelById(this.channelId);
+        Launcher.getBotContext().getGameRegistry().remove(this);
+        final TextChannel channel = Launcher.getBotContext().getShardManager().getTextChannelById(this.channelId);
         if (channel != null) {
             RestActions.sendMessage(channel,
                     String.format("Game has been stopped due to:"
@@ -639,7 +617,7 @@ public abstract class Game {
                                     + "\nSorry about that. The issue has been logged and will hopefully be fixed soon."
                                     + "\nIf you want to help solve this as fast as possible, please join our support guild."
                                     + "\nSay `%s` to receive an invite.",
-                            reasonMessage, WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_INVITE));
+                            reasonMessage, WolfiaConfig.DEFAULT_PREFIX + InviteCommand.TRIGGER));
         }
     }
 
@@ -681,7 +659,7 @@ public abstract class Game {
         }
 
         if (gameEnding) {
-            this.gameStats.addAction(simpleAction(Wolfia.getSelfUser().getIdLong(), Actions.GAMEEND, -1));
+            this.gameStats.addAction(simpleAction(this.selfUserId, Actions.GAMEEND, -1));
             this.gameStats.setEndTime(System.currentTimeMillis());
 
             if (villageWins) {
@@ -696,27 +674,33 @@ public abstract class Game {
                         .findFirst()
                         .ifPresent(t -> t.setWinner(true));
             }
+            MetricsRegistry.gamesPlayed
+                    .labels(this.gameStats.getGameType().name(), this.gameStats.getGameMode().name())
+                    .inc();
             try {
-                this.gameStats = Launcher.getBotContext().getDatabase().getWrapper().persist(this.gameStats);
+                this.gameStats = Launcher.getBotContext().getStatsService().recordGameStats(this.gameStats);
+
+                long gameId = this.gameStats.getGameId().orElseThrow();
                 out += String.format("%nThis game's id is **%s**, you can watch its replay with `%s %s`",
-                        this.gameStats.getId(), WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_REPLAY, this.gameStats.getId());
-            } catch (final DatabaseException e) {
+                        gameId, WolfiaConfig.DEFAULT_PREFIX + ReplayCommand.TRIGGER, gameId);
+            } catch (final Exception e) {
                 log.error("Db blew up saving game stats", e);
                 out += "The database it not available currently, a replay of this game will not be available.";
             }
             cleanUp();
             final TextChannel gameChannel = fetchGameChannel();
-            DiscordLogger.getLogger().log("%s `%s` Game **#%s** ended in guild **%s** `%s`, channel **#%s** `%s`, **%s %s %s** players",
-                    Emojis.END, TextchatUtils.berlinTime(), this.gameStats.getId(),
-                    gameChannel.getGuild().getName(), gameChannel.getGuild().getIdLong(),
-                    gameChannel.getName(), gameChannel.getIdLong(), Games.getInfo(this).textRep(), this.mode.textRep, this.players.size());
+            String info = Games.getInfo(this).textRep();
+            long gameId = this.gameStats.getGameId().orElseThrow();
+            log.info("Game #{} ended in guild {} {}, channel #{} {}, {} {} {} players",
+                    gameId, gameChannel.getGuild().getName(), gameChannel.getGuild().getIdLong(),
+                    gameChannel.getName(), gameChannel.getIdLong(), info, this.mode.textRep, this.players.size());
             // removing the game from the registry has to be the very last statement, since if a restart is queued, it
             // waits for an empty games registry
             RestActions.sendMessage(fetchGameChannel(), out,
-                    ignoredMessage -> Games.remove(this),
+                    ignoredMessage -> Launcher.getBotContext().getGameRegistry().remove(this),
                     throwable -> {
-                        log.error("Failed to send last message of game #{}", this.gameStats.getId(), throwable);
-                        Games.remove(this);
+                        log.error("Failed to send last message of game #{}", gameId, throwable);
+                        Launcher.getBotContext().getGameRegistry().remove(this);
                     });
             return true;
         }
@@ -743,6 +727,23 @@ public abstract class Game {
         return neb;
     }
 
+    protected void addToBaddieGuild(Player player) {
+        OAuth2Service oAuth2Service = Launcher.getBotContext().getoAuth2Service();
+
+        Optional<String> accessTokenOpt = oAuth2Service.getAccessTokenForScope(player.getUserId(), OAuth2Scope.GUILD_JOIN);
+        accessTokenOpt.ifPresent(accessToken ->
+                fetchBaddieChannel().getGuild().addMember(accessToken, player.getUserId()).queue());
+        // TODO tell player if they have no valid token
+    }
+
+    protected Future<?> scheduleIfGameStillRuns(Runnable runnable, Duration delay) {
+        return this.executor.schedule(() -> {
+            if (running) {
+                runnable.run();
+            }
+        }, delay.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
     //an way to create ActionStats object with a bunch of default/automatically generated values, like time stamps
     protected abstract ActionStats simpleAction(final long actor, final Actions action, final long target);
 
@@ -751,10 +752,8 @@ public abstract class Game {
      *
      * @param dayLength
      *         desired length of the day
-     * @param timeUnit
-     *         time unit of the provided length
      */
-    public abstract void setDayLength(long dayLength, TimeUnit timeUnit);
+    public abstract void setDayLength(Duration dayLength);
 
     /**
      * @return a status of the game
@@ -777,7 +776,7 @@ public abstract class Game {
      * @param innedPlayers
      *         the players who signed up
      */
-    public abstract void start(long channelId, GameInfo.GameMode mode, Set<Long> innedPlayers) throws DatabaseException;
+    public abstract void start(long channelId, GameInfo.GameMode mode, Set<Long> innedPlayers);
 
     /**
      * Let the game handle a command a user issued
@@ -792,4 +791,29 @@ public abstract class Game {
      */
     public abstract boolean issueCommand(@Nonnull CommandContext context)
             throws IllegalGameStateException;
+
+
+    //this method assumes that the id itself is legit and not a mistake
+    // it is an attempt to improve the occasional inconsistency of discord which makes looking up entities a gamble
+    // the main feature being the @Nonnull return contract, over the @Nullable contract of looking the entity up in JDA
+    @Nonnull
+    private static TextChannel fetchTextChannel(final long channelId) {
+        ShardManager shardManager = Launcher.getBotContext().getShardManager();
+        TextChannel tc = shardManager.getTextChannelById(channelId);
+        int attempts = 0;
+        while (tc == null) {
+            attempts++;
+            if (attempts > 100) {
+                throw new RuntimeException("Failed to fetch channel #" + channelId);
+            }
+            log.error("Could not find channel {}, retrying in a moment", channelId, new LogTheStackException());
+            try {
+                Thread.sleep(5000);
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            tc = shardManager.getTextChannelById(channelId);
+        }
+        return tc;
+    }
 }

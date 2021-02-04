@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,24 +17,27 @@
 
 package space.npstr.wolfia.commands.debug;
 
+import java.util.Arrays;
+import javax.annotation.Nonnull;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.IOwnerRestricted;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
-import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 import space.npstr.wolfia.utils.UserFriendlyException;
 
-import javax.annotation.Nonnull;
-import java.util.Arrays;
+@Command
+public class KillGameCommand implements BaseCommand {
 
-/**
- * Created by napster on 24.07.17.
- */
-public class KillGameCommand extends BaseCommand implements IOwnerRestricted {
+    private final GameRegistry gameRegistry;
 
-    public KillGameCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public KillGameCommand(GameRegistry gameRegistry) {
+        this.gameRegistry = gameRegistry;
+    }
+
+    @Override
+    public String getTrigger() {
+        return "killgame";
     }
 
     @Nonnull
@@ -44,7 +47,7 @@ public class KillGameCommand extends BaseCommand implements IOwnerRestricted {
     }
 
     @Override
-    public boolean execute(@Nonnull final CommandContext context) throws IllegalGameStateException {
+    public boolean execute(@Nonnull final CommandContext context) {
 
         if (!context.hasArguments()) {
             context.reply("Please provide the channelId of the game you want to kill.");
@@ -59,7 +62,7 @@ public class KillGameCommand extends BaseCommand implements IOwnerRestricted {
             return false;
         }
 
-        final Game game = Games.get(channelId);
+        final Game game = this.gameRegistry.get(channelId);
         if (game == null) {
             context.reply("There is no game registered for channel " + channelId);
             return false;

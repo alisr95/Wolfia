@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -20,8 +20,6 @@ package space.npstr.wolfia.game.definitions;
 import space.npstr.wolfia.utils.discord.Emojis;
 
 /**
- * Created by napster on 31.05.17.
- * <p>
  * Roles related stuff. Don't just change once created enums in production or things break
  */
 public enum Roles {
@@ -29,7 +27,7 @@ public enum Roles {
     COP("Cop", String.format("Your role is **Cop** %s. Each night you may check a player's alignment.", Emojis.MAGNIFIER)),
     SANTA("Santa", String.format("Your role is **Santa** %s. You may hand out a %s to a player each night.\n" +
                     "The present has a random chance to contain a %s, %s, %s or %s.", Emojis.SANTA,
-            Item.Items.PRESENT, Item.Items.GUN, Item.Items.MAGNIFIER, Item.Items.BOMB, Item.Items.ANGEL));
+            Item.ItemType.PRESENT, Item.ItemType.GUN, Item.ItemType.MAGNIFIER, Item.ItemType.BOMB, Item.ItemType.ANGEL));
 
     public final String textRep;
 

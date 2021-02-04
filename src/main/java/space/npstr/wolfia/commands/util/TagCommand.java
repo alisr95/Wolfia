@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,43 +17,50 @@
 
 package space.npstr.wolfia.commands.util;
 
-import com.google.common.collect.Streams;
-import net.dv8tion.jda.core.Permission;
-import net.dv8tion.jda.core.entities.IMentionable;
-import net.dv8tion.jda.core.entities.ISnowflake;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Role;
-import net.dv8tion.jda.core.entities.User;
-import space.npstr.sqlsauce.DatabaseException;
-import space.npstr.sqlsauce.fp.types.EntityKey;
-import space.npstr.wolfia.Launcher;
-import space.npstr.wolfia.commands.BaseCommand;
-import space.npstr.wolfia.commands.CommRegistry;
-import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.GuildCommandContext;
-import space.npstr.wolfia.config.properties.WolfiaConfig;
-import space.npstr.wolfia.db.entities.ChannelSettings;
-import space.npstr.wolfia.game.definitions.Games;
-import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
-import space.npstr.wolfia.utils.discord.TextchatUtils;
-
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.IMentionable;
+import net.dv8tion.jda.api.entities.ISnowflake;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.User;
+import space.npstr.wolfia.commands.BaseCommand;
+import space.npstr.wolfia.commands.CommandContext;
+import space.npstr.wolfia.commands.GuildCommandContext;
+import space.npstr.wolfia.commands.PublicCommand;
+import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
+import space.npstr.wolfia.domain.settings.ChannelSettings;
+import space.npstr.wolfia.domain.settings.ChannelSettingsService;
+import space.npstr.wolfia.utils.discord.TextchatUtils;
 
 /**
- * Created by napster on 30.06.17.
- * <p>
  * Allows users to sign up for a tag list
  */
-public class TagCommand extends BaseCommand {
+@Command
+public class TagCommand implements BaseCommand, PublicCommand {
 
-    public TagCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public static final String TRIGGER = "tag";
+
+    private final ChannelSettingsService channelSettingsService;
+    private final GameRegistry gameRegistry;
+
+    public TagCommand(ChannelSettingsService channelSettingsService, GameRegistry gameRegistry) {
+        this.channelSettingsService = channelSettingsService;
+        this.gameRegistry = gameRegistry;
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
     }
 
     @Nonnull
@@ -61,14 +68,13 @@ public class TagCommand extends BaseCommand {
     public String help() {
         return invocation() + " add/remove/[your message]"
                 + "\n#Add or remove yourself from the taglist, or tag members who signed up for the taglist with an optional message. Examples:"
-                + "\n  " + invocation() + " add"
-                + "\n  " + invocation() + " remove"
+                + "\n  " + invocation() + " add (or +)"
+                + "\n  " + invocation() + " remove (or -)"
                 + "\n  " + invocation() + " WANT SUM GAME?";
     }
 
     @Override
-    public boolean execute(@Nonnull final CommandContext commandContext)
-            throws IllegalGameStateException, DatabaseException {
+    public boolean execute(@Nonnull final CommandContext commandContext) {
 
         final GuildCommandContext context = commandContext.requireGuild(false);
         if (context == null) {
@@ -76,9 +82,10 @@ public class TagCommand extends BaseCommand {
             return false;
         }
 
-        final EntityKey<Long, ChannelSettings> key = ChannelSettings.key(context.textChannel.getIdLong());
-        final ChannelSettings settings = Launcher.getBotContext().getDatabase().getWrapper().getOrCreate(key);
-        final Set<Long> tags = settings.getTags();
+        long channelId = context.textChannel.getIdLong();
+        ChannelSettingsService.Action channelAction = this.channelSettingsService.channel(channelId);
+        ChannelSettings channelSettings = channelAction.getOrDefault();
+        final Set<Long> tags = channelSettings.getTags();
 
         String option = "";
         if (context.hasArguments()) {
@@ -94,15 +101,16 @@ public class TagCommand extends BaseCommand {
 
         if (action == TagAction.TAG) {
 
-            if (Games.get(context.textChannel) != null) {
+            if (this.gameRegistry.get(context.textChannel) != null) {
                 context.replyWithMention("I will not post the tag list during an ongoing game.");
                 return false;
             }
 
-            if (System.currentTimeMillis() - settings.getTagLastUsed()
-                    < TimeUnit.MINUTES.toMillis(settings.getTagCooldown())) {
+            long tagCooldownMinutes = channelSettings.getTagCooldownMinutes();
+            if (System.currentTimeMillis() - channelSettings.getTagLastUsed()
+                    < TimeUnit.MINUTES.toMillis(tagCooldownMinutes)) {
                 final String answer = String.format("you need to wait at least %s minutes between calling the tag list.",
-                        settings.getTagCooldown());
+                        tagCooldownMinutes);
                 context.replyWithMention(answer);
                 return false;
             }
@@ -111,7 +119,7 @@ public class TagCommand extends BaseCommand {
             if (!tags.contains(context.invoker.getIdLong())
                     && context.member.getRoles().stream().mapToLong(Role::getIdLong).noneMatch(tags::contains)) {
                 context.replyWithMention(String.format("you can't use the taglist when you aren't part of it yourself. "
-                        + "Say `%s` to add yourself to it.", WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_TAG + " +"));
+                        + "Say `%s` to add yourself to it.", WolfiaConfig.DEFAULT_PREFIX + TagCommand.TRIGGER + " +"));
                 return false;
             }
 
@@ -144,13 +152,12 @@ public class TagCommand extends BaseCommand {
                     cleanUp.add(id);
                 }
             }
-            Launcher.getBotContext().getDatabase().getWrapper().findApplyAndMerge(key, cs -> {
-                settings.removeTags(cleanUp);
-                for (final StringBuilder sb : outs) {
-                    context.reply(sb.toString());
-                }
-                return settings.tagUsed();
-            });
+
+            channelAction.removeTags(cleanUp);
+            for (final StringBuilder sb : outs) {
+                context.reply(sb.toString());
+            }
+            channelAction.tagUsed();
 
             return true;
         }
@@ -166,7 +173,7 @@ public class TagCommand extends BaseCommand {
                     context.replyWithMention("you are already on the tag list of this channel.");
                     return false;
                 } else {
-                    Launcher.getBotContext().getDatabase().getWrapper().findApplyAndMerge(key, cs -> cs.addTag(context.invoker.getIdLong()));
+                    channelAction.addTag(context.getInvoker().getIdLong());
                     context.replyWithMention("you have been added to the tag list of this channel.");
                     return true;
                 }
@@ -175,7 +182,7 @@ public class TagCommand extends BaseCommand {
                     context.replyWithMention("you are already removed from the tag list of this channel.");
                     return false;
                 } else {
-                    Launcher.getBotContext().getDatabase().getWrapper().findApplyAndMerge(key, cs -> cs.removeTag(context.invoker.getIdLong()));
+                    channelAction.removeTag(context.getInvoker().getIdLong());
                     context.replyWithMention("you have been removed from the tag list of this channel");
                     return true;
                 }
@@ -189,30 +196,23 @@ public class TagCommand extends BaseCommand {
                         + "**" + Permission.MESSAGE_MANAGE.getName() + "**");
                 return false;
             }
-
-            final List<String> mentions = Streams.concat(
+            final List<String> mentions = Stream.concat(
                     mentionedUsers.stream().map(IMentionable::getAsMention),
                     mentionedRoles.stream().map(IMentionable::getAsMention)
             ).collect(Collectors.toList());
             final String joined = String.join("**, **", mentions);
 
-            final List<Long> ids = Streams.concat(
+            final List<Long> ids = Stream.concat(
                     mentionedUsers.stream().map(ISnowflake::getIdLong),
                     mentionedRoles.stream().map(ISnowflake::getIdLong)
             ).collect(Collectors.toList());
 
             if (action == TagAction.ADD) {
-                Launcher.getBotContext().getDatabase().getWrapper().findApplyAndMerge(key, cs -> {
-                    ids.forEach(cs::addTag);
-                    return cs;
-                });
+                channelAction.addTags(ids);
                 context.replyWithMention(String.format("added **%s** to the tag list.", joined));
                 return true;
             } else { //removing
-                Launcher.getBotContext().getDatabase().getWrapper().findApplyAndMerge(key, cs -> {
-                    ids.forEach(cs::removeTag);
-                    return cs;
-                });
+                channelAction.removeTags(ids);
                 context.replyWithMention(String.format("removed **%s** from the tag list.", joined));
                 return true;
             }

@@ -4,10 +4,25 @@ version: '3.7'
 
 services:
   dev-postgres:
-    image: napstr/wolfia-postgres:master
+    image: napstr/poggres:12
     restart: always
     ports:
-      - 127.0.0.1:5432:5432
+      - 127.0.0.1:5442:5432
     environment:
+      - POSTGRES_PASSWORD=wolfia
       - ROLE=wolfia
+      - PASSWORD=wolfia
       - DB=wolfia
+      - EXTENSIONS=hstore
+
+  dev-redis:
+    image: redis:5-alpine
+    restart: always
+    entrypoint:
+      - redis-server
+      - --appendonly
+      - "yes"
+    ports:
+      - 127.0.0.1:6389:6379
+    sysctls:
+      - net.core.somaxconn=511   # container was spitting out a warning telling us to do this

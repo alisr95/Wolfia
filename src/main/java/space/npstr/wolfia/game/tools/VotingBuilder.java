@@ -1,9 +1,21 @@
-package space.npstr.wolfia.game.tools;
+/*
+ * Copyright (C) 2016-2020 the original author or authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
-import space.npstr.wolfia.game.Player;
-import space.npstr.wolfia.game.definitions.Phase;
-import space.npstr.wolfia.utils.discord.Emojis;
-import space.npstr.wolfia.utils.discord.TextchatUtils;
+package space.npstr.wolfia.game.tools;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -13,10 +25,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import space.npstr.wolfia.game.Player;
+import space.npstr.wolfia.game.definitions.Phase;
+import space.npstr.wolfia.utils.discord.Emojis;
+import space.npstr.wolfia.utils.discord.TextchatUtils;
 
 /**
- * Created by napster on 16.07.17.
- * <p>
  * Easy vote embeds
  */
 public class VotingBuilder {
@@ -66,13 +80,12 @@ public class VotingBuilder {
     public NiceEmbedBuilder getEmbed(final Map<Player, Player> votes) {
 
         NiceEmbedBuilder neb = NiceEmbedBuilder.defaultBuilder();
-        neb = addHeader(neb, this.endTime - System.currentTimeMillis());
+        addHeader(neb, this.endTime - System.currentTimeMillis());
 
         final List<VoteEntry> processedVotes = processVotes(votes);
         neb.addField(renderVotes("", processedVotes, true, true));
 
-        neb = addNotes(neb);
-        return neb;
+        return addNotes(neb);
     }
 
     public NiceEmbedBuilder getFinalEmbed(final Map<Player, Player> votes, final Phase phase, final int cycle) {
@@ -109,7 +122,9 @@ public class VotingBuilder {
             nv.append(this.unvoteEmoji).append(" ");
         }
         final Set<Player> nonVoters = getNonVoters(votes.stream().flatMap(ve -> ve.voters.stream()).collect(Collectors.toSet()));
-        nv.append("**Non-voters: **\n").append(String.join(", ", nonVoters.stream().map(Player::bothNamesFormatted).collect(Collectors.toList())));
+        nv.append("**Non-voters: **\n").append(nonVoters.stream()
+                .map(Player::bothNamesFormatted)
+                .collect(Collectors.joining(", ")));
 
         votesField.add(nv.toString());
         return votesField;
@@ -143,7 +158,7 @@ public class VotingBuilder {
     }
 
     private NiceEmbedBuilder addHeader(final NiceEmbedBuilder neb, final long timeLeft) {
-        final String headerStr = this.header.replaceAll("%timeleft", TextchatUtils.formatMillis(timeLeft));
+        final String headerStr = this.header.replace("%timeleft", TextchatUtils.formatMillis(timeLeft));
         neb.addField("", headerStr, false);
         return neb;
     }

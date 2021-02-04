@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,28 +17,36 @@
 
 package space.npstr.wolfia.commands;
 
-import net.dv8tion.jda.core.JDA;
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.entities.MessageChannel;
-import net.dv8tion.jda.core.entities.TextChannel;
-import net.dv8tion.jda.core.entities.User;
-import net.dv8tion.jda.core.events.message.MessageReceivedEvent;
-import space.npstr.sqlsauce.entities.discord.DiscordUser;
-import space.npstr.wolfia.App;
-import space.npstr.wolfia.Wolfia;
-
+import io.prometheus.client.Collector;
+import java.awt.Color;
+import java.util.Optional;
+import java.util.function.Consumer;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.MessageBuilder;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.MessageChannel;
+import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import space.npstr.wolfia.system.ApplicationInfoProvider;
+import space.npstr.wolfia.system.metrics.MetricsRegistry;
+import space.npstr.wolfia.utils.discord.RestActions;
+import space.npstr.wolfia.utils.discord.TextchatUtils;
 
 /**
- * Created by napster on 16.11.17.
- * <p>
  * Contexts intended for fast usage, dont save these in any kind of variables
  */
-public class MessageContext extends Context {
+public class MessageContext implements Context {
+
+    // blueish black that reminds of a clear nights sky
+    // #001830
+    public static final Color BLACKIA = new Color(0, 24, 48);
 
     //@formatter:off
     @Nonnull public final MessageChannel channel;
@@ -48,6 +56,7 @@ public class MessageContext extends Context {
     @Nonnull public final JDA jda;
     //@formatter:on
 
+    private final ApplicationInfoProvider appInfoProvider;
 
     public MessageContext(@Nonnull final MessageReceivedEvent event) {
         this.channel = event.getChannel();
@@ -55,6 +64,7 @@ public class MessageContext extends Context {
         this.msg = event.getMessage();
         this.event = event;
         this.jda = event.getJDA();
+        this.appInfoProvider = new ApplicationInfoProvider(event.getJDA().getShardManager());
     }
 
 
@@ -94,67 +104,108 @@ public class MessageContext extends Context {
     }
 
     @Override
-    @Nullable
     @CheckReturnValue
-    public Guild getGuild() {
-        return this.event.getGuild();
+    public Optional<Guild> getGuild() {
+        return this.event.isFromGuild() ? Optional.of(this.event.getGuild()) : Optional.empty();
     }
 
     @Override
-    @Nullable
     @CheckReturnValue
-    public Member getMember() {
-        return this.event.getMember();
-    }
-
-    @Nonnull
-    @CheckReturnValue
-    public String getMyOwnNick() {
-        final Guild g = getGuild();
-        if (g != null) {
-            return g.getSelfMember().getEffectiveName();
-        } else {
-            return this.jda.getSelfUser().getName();
-        }
-    }
-
-    //name or nickname of the invoker issuing the command
-    @Nonnull
-    @CheckReturnValue
-    public String getEffectiveName() {
-        if (this.channel instanceof TextChannel) {
-            final Member member = ((TextChannel) this.channel).getGuild().getMember(this.invoker);
-            if (member != null) {
-                return member.getEffectiveName();
-            }
-        }
-        return this.invoker.getName();
-    }
-
-    @Nonnull
-    @CheckReturnValue
-    //nickname of the member entity of the provided user id in this guild or their user name or a default value
-    public String getEffectiveName(final long userId) {
-        final Guild g = getGuild();
-        if (g != null) {
-            final Member member = g.getMemberById(userId);
-            if (member != null) {
-                return member.getEffectiveName();
-            }
-        }
-        //fallback to global user lookup
-        final User u = Wolfia.getUserById(userId);
-        if (u != null) {
-            return u.getName();
-        } else {
-            return DiscordUser.UNKNOWN_NAME; //todo db lookup
-        }
+    public Optional<Member> getMember() {
+        return Optional.ofNullable(this.event.getMember());
     }
 
     /**
      * @return true if the invoker is the bot owner, false otherwise
      */
     public boolean isOwner() {
-        return App.isOwner(this.invoker);
+        return this.appInfoProvider.isOwner(this.invoker);
+    }
+
+
+    // ********************************************************************************
+    //                         Convenience reply methods
+    // ********************************************************************************
+    // NOTE: they all try to end up in the reply0 method for consistent behaviour
+
+
+    public void reply(@Nonnull final MessageEmbed embed) {
+        reply0(RestActions.from(embed), null);
+    }
+
+    public void reply(@Nonnull final EmbedBuilder eb) {
+        reply(eb.build());
+    }
+
+    public void reply(@Nonnull final Message message, @Nullable final Consumer<Message> onSuccess) {
+        reply0(message, onSuccess);
+    }
+
+    public void reply(@Nonnull final Message message) {
+        reply0(message, null);
+    }
+
+    public void reply(@Nonnull final String message) {
+        reply(new MessageBuilder().append(message).build(), null);
+    }
+
+    public void replyWithName(@Nonnull final String message, @Nullable final Consumer<Message> onSuccess) {
+        final Optional<Member> member = getMember();
+        if (member.isPresent()) {
+            reply(TextchatUtils.prefaceWithName(member.get(), message, true), onSuccess);
+        } else {
+            reply(TextchatUtils.prefaceWithName(invoker, message, true), onSuccess);
+        }
+    }
+
+    public void replyWithName(@Nonnull final String message) {
+        replyWithName(message, null);
+    }
+
+    public void replyWithMention(@Nonnull final String message, @Nullable final Consumer<Message> onSuccess) {
+        reply(TextchatUtils.prefaceWithMention(invoker, message), onSuccess);
+    }
+
+    public void replyWithMention(@Nonnull final String message) {
+        replyWithMention(message, null);
+    }
+
+
+    public void replyPrivate(@Nonnull final String message, @Nullable final Consumer<Message> onSuccess, @Nonnull final Consumer<Throwable> onFail) {
+        RestActions.sendPrivateMessage(invoker, message, onSuccess, onFail);
+    }
+
+    public void sendTyping() {
+        RestActions.sendTyping(channel);
+    }
+
+    /**
+     * @return a general purpose preformatted builder for embeds
+     */
+    @Nonnull
+    public static EmbedBuilder getDefaultEmbedBuilder() {
+        return new EmbedBuilder()
+                .setColor(BLACKIA);
+    }
+
+
+    // ********************************************************************************
+    //                         Internal context stuff
+    // ********************************************************************************
+
+    private void reply0(@Nonnull final Message message, @Nullable final Consumer<Message> onSuccess) {
+        long started = System.nanoTime();
+
+        Consumer<Message> successWrapper = m -> {
+            MetricsRegistry.commandResponseTime.observe((System.nanoTime() - started) / Collector.NANOSECONDS_PER_SECOND);
+            long in = getMessage().getTimeCreated().toInstant().toEpochMilli();
+            long out = m.getTimeCreated().toInstant().toEpochMilli();
+            MetricsRegistry.commandTotalTime.observe((out - in) / Collector.MILLISECONDS_PER_SECOND);
+            if (onSuccess != null) {
+                onSuccess.accept(m);
+            }
+        };
+
+        RestActions.sendMessage(channel, message, successWrapper);
     }
 }

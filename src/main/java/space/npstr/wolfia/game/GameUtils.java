@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,27 +17,24 @@
 
 package space.npstr.wolfia.game;
 
-import net.dv8tion.jda.core.entities.User;
-import space.npstr.wolfia.commands.CommRegistry;
-import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.config.properties.WolfiaConfig;
-import space.npstr.wolfia.utils.discord.TextchatUtils;
-
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.entities.User;
+import space.npstr.wolfia.commands.CommandContext;
+import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.setup.StatusCommand;
+import space.npstr.wolfia.utils.discord.TextchatUtils;
 
 /**
- * Created by napster on 21.05.17.
- * <p>
  * Helpful mehtods for running games
  */
 public class GameUtils {
@@ -77,7 +74,7 @@ public class GameUtils {
     public static <C> List<C> mostVoted(final Map<?, C> votes, final Collection<C> allCandidates) {
         long mostVotes = 0;
         final Map<C, Long> votesAmountToCandidate = new HashMap<>(allCandidates.size());
-        for (final C candidate : allCandidates.stream().distinct().collect(Collectors.toSet())) {
+        for (final C candidate : new HashSet<>(allCandidates)) {
             final long votesAmount = votes.values().stream().filter(candidate::equals).count();
             votesAmountToCandidate.put(candidate, votesAmount);
             if (votesAmount > mostVotes) {
@@ -101,7 +98,7 @@ public class GameUtils {
      */
     public static <C> long mostVotes(final Map<?, C> votes) {
         long mostVotes = 0;
-        for (final C candidate : votes.values().stream().distinct().collect(Collectors.toSet())) {
+        for (final C candidate : new HashSet<>(votes.values())) {
             final long votesAmount = votes.values().stream().filter(candidate::equals).count();
             if (votesAmount > mostVotes) {
                 mostVotes = votesAmount;
@@ -124,13 +121,6 @@ public class GameUtils {
         return mapped;
     }
 
-
-    public static List<String> asMentions(final Collection<Player> input) {
-        return input.stream()
-                .map(p -> TextchatUtils.userAsMention(p.getUserId()))
-                .collect(Collectors.toList());
-    }
-
     /**
      * @return the exact player found, or null and post a message
      */
@@ -138,7 +128,7 @@ public class GameUtils {
         final List<Player> found = findPlayer(players, context);
 
         final String explanation = String.format("Please use a mention or the player number which you can find with " +
-                "`%s` so that I can clearly know who you are targeting.", WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_STATUS);
+                "`%s` so that I can clearly know who you are targeting.", WolfiaConfig.DEFAULT_PREFIX + StatusCommand.TRIGGER);
         if (found.isEmpty()) {
             context.replyWithMention("could not identify a player in your command! " + explanation);
             return null;
@@ -176,6 +166,7 @@ public class GameUtils {
                 return Collections.singletonList(maybe.get());
             }
         } catch (final NumberFormatException ignored) {
+            // ignored
         }
 
         //by userid
@@ -186,6 +177,7 @@ public class GameUtils {
                 return Collections.singletonList(maybe.get());
             }
         } catch (final NumberFormatException ignored) {
+            // ignored
         }
 
 
@@ -194,7 +186,7 @@ public class GameUtils {
         for (final Player p : players) {
             final int distanceName = TextchatUtils.levenshteinDist(p.getName(), input);
             final int distanceNick = TextchatUtils.levenshteinDist(p.getNick(), input);
-            distances.put(p, distanceName < distanceNick ? distanceName : distanceNick);
+            distances.put(p, Math.min(distanceName, distanceNick));
         }
         int smallestDistance = Integer.MAX_VALUE;
         for (final Map.Entry<Player, Integer> entry : distances.entrySet()) {
@@ -216,4 +208,6 @@ public class GameUtils {
             return result;
         }
     }
+
+    private GameUtils() {}
 }

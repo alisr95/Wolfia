@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,26 +17,38 @@
 
 package space.npstr.wolfia.commands.ingame;
 
-import space.npstr.wolfia.commands.CommRegistry;
+import java.util.List;
+import javax.annotation.Nonnull;
 import space.npstr.wolfia.commands.CommandContext;
 import space.npstr.wolfia.commands.GameCommand;
 import space.npstr.wolfia.commands.GuildCommandContext;
+import space.npstr.wolfia.commands.util.HelpCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
 import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 
-import javax.annotation.Nonnull;
-
 /**
- * Created by napster on 21.05.17.
- * <p>
  * A player shoots another player
  */
+@Command
 public class ShootCommand extends GameCommand {
 
-    public ShootCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public static final String TRIGGER = "shoot";
+
+    public ShootCommand(GameRegistry gameRegistry) {
+        super(gameRegistry);
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
+    }
+
+    @Override
+    public List<String> getAliases() {
+        return List.of("s", "blast");
     }
 
     @Nonnull
@@ -53,11 +65,11 @@ public class ShootCommand extends GameCommand {
 
         final GuildCommandContext context = commandContext.requireGuild(false);
         if (context != null) { // find game through guild / textchannel
-            Game game = Games.get(context.textChannel);
+            Game game = this.gameRegistry.get(context.textChannel);
             if (game == null) {
                 //private guild?
-                for (final Game g : Games.getAll().values()) {
-                    if (context.guild.getIdLong() == g.getPrivateGuildId()) {
+                for (final Game g : this.gameRegistry.getAll().values()) {
+                    if (context.guild.getIdLong() == g.getPrivateRoomGuildId()) {
                         game = g;
                         break;
                     }
@@ -65,7 +77,7 @@ public class ShootCommand extends GameCommand {
 
                 if (game == null) {
                     context.replyWithMention(String.format("there is no game currently going on in here. Say `%s` to get started!",
-                            WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_HELP));
+                            WolfiaConfig.DEFAULT_PREFIX + HelpCommand.TRIGGER));
                     return false;
                 }
             }
@@ -75,7 +87,7 @@ public class ShootCommand extends GameCommand {
             //todo handle a player being part of multiple games properly
             boolean issued = false;
             boolean success = false;
-            for (final Game g : Games.getAll().values()) {
+            for (final Game g : this.gameRegistry.getAll().values()) {
                 if (g.isUserPlaying(commandContext.invoker)) {
                     if (g.issueCommand(commandContext)) {
                         success = true;
@@ -85,7 +97,7 @@ public class ShootCommand extends GameCommand {
             }
             if (!issued) {
                 commandContext.replyWithMention(String.format("you aren't playing in any game currently. Say `%s` to get started!",
-                        WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_HELP));
+                        WolfiaConfig.DEFAULT_PREFIX + HelpCommand.TRIGGER));
                 return false;
             }
             return success;

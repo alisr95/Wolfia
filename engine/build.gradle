@@ -1,37 +1,11 @@
-apply plugin: "org.jetbrains.kotlin.jvm"
-apply plugin: "com.adarshr.test-logger"
-apply plugin: "info.solidsoft.pitest"
-
+plugins {
+    id 'scala'
+}
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
-    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:$kotlinVersion"
-    testRuntime "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
+    implementation "org.scala-lang:scala-library:$scalaVersion"
+    implementation "com.typesafe.akka:akka-actor_$scalaMinorVersion:$akkaVersion"
 
-}
-
-test {
-    useJUnitPlatform()
-}
-
-testlogger {
-    theme 'mocha'
-}
-
-pitest {
-    pitestVersion = "$pitestVersion"
-    testPlugin = 'junit5'
-    timestampedReports = false
-    threads = 4
-}
-
-compileKotlin {
-    kotlinOptions {
-        jvmTarget = "$kotlinJvmTarget"
-    }
-}
-compileTestKotlin {
-    kotlinOptions {
-        jvmTarget = "$kotlinJvmTarget"
-    }
+//    testImplementation 'org.scalatest:scalatest_2.12:3.0.7'
+//    testImplementation 'junit:junit:4.12'
 }

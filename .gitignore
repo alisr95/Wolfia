@@ -103,9 +103,8 @@ hs_err_pid*
 /build/
 /common/build
 /discord-wrapper/build
-/dashboard/build
 /database-codegen/build
-/platform/build
+/engine/build
 
 # Ignore Gradle GUI config
 gradle-app.setting
@@ -116,15 +115,18 @@ gradle-app.setting
 # Cache of project
 .gradletasknamecache
 
-wolfia-secrets.yaml
+# # Work around https://youtrack.jetbrains.com/issue/IDEA-116898
+# gradle/wrapper/gradle-wrapper.properties
+
+*sneaky.yaml
+*wolfia.yaml
+*application.yaml
 *javaloader.json
 
-logs/
+gradle.properties
+
+/logs/
 
 *version.properties
 wolfia_rsa*
-acme.json
-
-postgres-data
-postgres-data.tar.gz
-redis-data
+.env

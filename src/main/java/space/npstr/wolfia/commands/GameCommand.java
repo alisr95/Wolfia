@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,22 +17,22 @@
 
 package space.npstr.wolfia.commands;
 
+import javax.annotation.Nonnull;
+import space.npstr.wolfia.commands.util.HelpCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
 import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 
-import javax.annotation.Nonnull;
-
 /**
- * Created by napster on 21.05.17.
- * <p>
  * Game commands are different from regular commands as they can be registered by games.
  */
-public abstract class GameCommand extends BaseCommand {
+public abstract class GameCommand implements BaseCommand, PublicCommand {
 
-    public GameCommand(final String trigger, final String... triggers) {
-        super(trigger, triggers);
+    protected final GameRegistry gameRegistry;
+
+    protected GameCommand(GameRegistry gameRegistry) {
+        this.gameRegistry = gameRegistry;
     }
 
     @Override
@@ -42,11 +42,11 @@ public abstract class GameCommand extends BaseCommand {
             return false;
         }
 
-        Game game = Games.get(context.textChannel);
+        Game game = this.gameRegistry.get(context.textChannel);
         if (game == null) {
             //private guild?
-            for (final Game g : Games.getAll().values()) {
-                if (context.guild.getIdLong() == g.getPrivateGuildId()) {
+            for (final Game g : this.gameRegistry.getAll().values()) {
+                if (context.guild.getIdLong() == g.getPrivateRoomGuildId()) {
                     game = g;
                     break;
                 }
@@ -54,7 +54,7 @@ public abstract class GameCommand extends BaseCommand {
 
             if (game == null) {
                 context.replyWithMention(String.format("there is no game currently going on in here. Say `%s` to get started!",
-                        WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_HELP));
+                        WolfiaConfig.DEFAULT_PREFIX + HelpCommand.TRIGGER));
                 return false;
             }
         }

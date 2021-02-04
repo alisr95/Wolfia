@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2019 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,12 +17,12 @@
 
 package space.npstr.wolfia.webapi;
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
-
-import javax.servlet.http.HttpServletRequest;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import javax.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 /**
  * Common base class for endpoints
@@ -43,5 +43,9 @@ public abstract class BaseEndpoint {
         log.info("Catch all triggered: {} {} {}: {} {}: {}",
                 method, path, HttpHeaders.ACCEPT, acceptableMediaTypes, HttpHeaders.CONTENT_TYPE, contentType);
         return CompletableFuture.completedStage(NOT_FOUND);
+    }
+
+    protected <T> ResponseEntity<T> unauthorized() {
+        return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
     }
 }

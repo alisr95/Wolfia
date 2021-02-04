@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,17 +17,29 @@
 
 package space.npstr.wolfia.commands.ingame;
 
-import space.npstr.wolfia.commands.GameCommand;
-
+import java.util.List;
 import javax.annotation.Nonnull;
+import space.npstr.wolfia.commands.GameCommand;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 
-/**
- * Created by napster on 06.08.17.
- */
+@Command
 public class VoteCountCommand extends GameCommand {
 
-    public VoteCountCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public static final String TRIGGER = "votecount";
+
+    protected VoteCountCommand(GameRegistry gameRegistry) {
+        super(gameRegistry);
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
+    }
+
+    @Override
+    public List<String> getAliases() {
+        return List.of("vc");
     }
 
     @Nonnull

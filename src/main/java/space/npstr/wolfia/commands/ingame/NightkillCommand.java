@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,22 +17,33 @@
 
 package space.npstr.wolfia.commands.ingame;
 
+import java.util.List;
+import javax.annotation.Nonnull;
 import space.npstr.wolfia.commands.CommandContext;
 import space.npstr.wolfia.commands.GameCommand;
 import space.npstr.wolfia.commands.GuildCommandContext;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
 import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 
-import javax.annotation.Nonnull;
-
-/**
- * Created by napster on 06.08.17.
- */
+@Command
 public class NightkillCommand extends GameCommand {
 
-    public NightkillCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public static final String TRIGGER = "nightkill";
+
+    public NightkillCommand(GameRegistry gameRegistry) {
+        super(gameRegistry);
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
+    }
+
+    @Override
+    public List<String> getAliases() {
+        return List.of("nk");
     }
 
     @Nonnull
@@ -52,8 +63,8 @@ public class NightkillCommand extends GameCommand {
         //the nightkill command is expected to be called from a private guild, and only one game is allowed to run in
         //a private guild at the time
         Game game = null;
-        for (final Game g : Games.getAll().values()) {
-            if (context.guild.getIdLong() == g.getPrivateGuildId()) {
+        for (final Game g : this.gameRegistry.getAll().values()) {
+            if (context.guild.getIdLong() == g.getPrivateRoomGuildId()) {
                 game = g;
                 break;
             }

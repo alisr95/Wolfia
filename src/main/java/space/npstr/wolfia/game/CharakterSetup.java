@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,30 +17,23 @@
 
 package space.npstr.wolfia.game;
 
-import space.npstr.wolfia.game.definitions.Alignments;
-import space.npstr.wolfia.game.definitions.Roles;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import space.npstr.wolfia.game.definitions.Alignments;
+import space.npstr.wolfia.game.definitions.Roles;
 
 /**
- * Created by napster on 05.07.17.
- * <p>
  * A configuration of roles that define a game setup, mainly used by mafia games
  */
 public class CharakterSetup {
 
     private final List<Charakter> charakters = new ArrayList<>();
 
-    public Collection<Charakter> getCharakters() {
-        return this.charakters;
-    }
-
     public Collection<Charakter> getRandedCharakters() {
         Collections.shuffle(this.charakters);
-        return this.charakters;
+        return Collections.unmodifiableList(this.charakters);
     }
 
     public CharakterSetup addRoleAndAlignment(final Alignments alignment, final Roles role, final int... amount) {

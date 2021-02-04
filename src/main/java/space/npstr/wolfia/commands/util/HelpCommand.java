@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,32 +17,36 @@
 
 package space.npstr.wolfia.commands.util;
 
-import net.dv8tion.jda.core.entities.ChannelType;
-import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.entities.MessageChannel;
-import net.dv8tion.jda.core.entities.TextChannel;
+import java.util.function.Consumer;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.entities.ChannelType;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.MessageChannel;
+import net.dv8tion.jda.api.entities.TextChannel;
 import space.npstr.wolfia.App;
 import space.npstr.wolfia.Launcher;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommRegistry;
 import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.IOwnerRestricted;
+import space.npstr.wolfia.commands.PublicCommand;
+import space.npstr.wolfia.commands.game.StartCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.setup.InCommand;
 import space.npstr.wolfia.utils.discord.TextchatUtils;
 
-import javax.annotation.Nonnull;
-import java.util.function.Consumer;
+public class HelpCommand implements BaseCommand, PublicCommand {
 
-/**
- * Created by npstr on 09.09.2016
- */
-public class HelpCommand extends BaseCommand {
+    public static final String TRIGGER = "help";
 
     private final CommRegistry commRegistry;
 
-    public HelpCommand(final CommRegistry commRegistry, final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public HelpCommand(final CommRegistry commRegistry) {
         this.commRegistry = commRegistry;
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
     }
 
     @Nonnull
@@ -64,9 +68,9 @@ public class HelpCommand extends BaseCommand {
         if (context.hasArguments() && channel.getType() == ChannelType.TEXT && ((TextChannel) channel).canTalk()) {
             final BaseCommand command = this.commRegistry.getCommand(context.args[0]);
             final String answer;
-            if (command == null || command instanceof IOwnerRestricted) {
+            if (!(command instanceof PublicCommand)) {
                 answer = String.format("There is no command registered for `%s`. Use `%s` to see all available commands!",
-                        TextchatUtils.defuseMentions(context.args[0]), WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_COMMANDS);
+                        TextchatUtils.defuseMentions(context.args[0]), WolfiaConfig.DEFAULT_PREFIX + CommandsCommand.TRIGGER);
             } else {
                 answer = TextchatUtils.asMarkdown(command.getHelp());
             }
@@ -90,9 +94,9 @@ public class HelpCommand extends BaseCommand {
                             + "\nUse `%s` and `%s` to start games."
                             + "\nSay `%s` to show all commands."
                             + "\nSay `%s [command]` to show help for a specific command.",
-                    WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_IN, WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_START,
-                    WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_COMMANDS,
-                    WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_COMMANDS);
+                    WolfiaConfig.DEFAULT_PREFIX + InCommand.TRIGGER, WolfiaConfig.DEFAULT_PREFIX + StartCommand.TRIGGER,
+                    WolfiaConfig.DEFAULT_PREFIX + CommandsCommand.TRIGGER,
+                    WolfiaConfig.DEFAULT_PREFIX + HelpCommand.TRIGGER);
             context.replyWithMention(answer);
         };
         final Consumer<Throwable> onFail = t -> {

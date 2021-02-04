@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,7 +17,12 @@
 
 package space.npstr.wolfia.game.mafia;
 
-import net.dv8tion.jda.core.Permission;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.Permission;
 import space.npstr.wolfia.game.CharakterSetup;
 import space.npstr.wolfia.game.GameInfo;
 import space.npstr.wolfia.game.definitions.Alignments;
@@ -25,15 +30,7 @@ import space.npstr.wolfia.game.definitions.Games;
 import space.npstr.wolfia.game.definitions.Roles;
 import space.npstr.wolfia.game.definitions.Scope;
 
-import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
- * Created by napster on 02.07.17.
- * <p>
  * Static information about the mafia game
  */
 public class MafiaInfo implements GameInfo {
@@ -64,7 +61,7 @@ public class MafiaInfo implements GameInfo {
             case LITE:
             case PURE:
                 requiredPermissions.put(Permission.MESSAGE_MANAGE, Scope.CHANNEL); //to delete reactions
-                requiredPermissions.put(Permission.MANAGE_PERMISSIONS, Scope.CHANNEL);
+                break;
             default:
                 break;
         }
@@ -81,8 +78,6 @@ public class MafiaInfo implements GameInfo {
 
     @Override
     public boolean isAcceptablePlayerCount(final int playerCount, final GameMode mode) {
-        //noinspection SimplifiableIfStatement
-//        if (Config.C.isDebug && 3 <= playerCount) return true;
         return ((mode == GameMode.LITE && 9 <= playerCount) || (mode == GameMode.XMAS && 7 <= playerCount));
     }
 
@@ -92,16 +87,6 @@ public class MafiaInfo implements GameInfo {
     @Nonnull
     @Override
     public CharakterSetup getCharacterSetup(@Nonnull final GameMode mode, final int playerCount) {
-
-        //for debugging only, mostly contains a vast amount of new roles
-//        if (Config.C.isDebug && 3 <= playerCount) {
-//            return new CharakterSetup()
-//                    .addRoleAndAlignment(Alignments.WOLF, Roles.VANILLA)
-//                    .addRoleAndAlignment(Alignments.VILLAGE, Roles.COP)
-//                    .addRoleAndAlignment(Alignments.VILLAGE, Roles.SANTA, playerCount - 2)
-//                    ;
-//        }
-
         if (!isAcceptablePlayerCount(playerCount, mode)) {
             throw new IllegalArgumentException(String.format(
                     "There is no possible character setup for the provided player count %s in this game %s mode %s",
@@ -141,10 +126,5 @@ public class MafiaInfo implements GameInfo {
     @Override
     public String textRep() {
         return Games.MAFIA.textRep;
-    }
-
-    @Override
-    public Games getGameType() {
-        return Games.MAFIA;
     }
 }

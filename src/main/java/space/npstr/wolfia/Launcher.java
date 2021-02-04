@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2018 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,8 +17,11 @@
 
 package space.npstr.wolfia;
 
-import net.dv8tion.jda.bot.sharding.ShardManager;
-import net.dv8tion.jda.core.JDAInfo;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.JDAInfo;
+import net.dv8tion.jda.api.sharding.ShardManager;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
@@ -30,16 +33,16 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.boot.context.event.ApplicationFailedEvent;
 import space.npstr.prometheus_extensions.ThreadPoolCollector;
-import space.npstr.wolfia.commands.CommRegistry;
-import space.npstr.wolfia.discordwrapper.DiscordEntityProvider;
+import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.events.BotStatusLogger;
 import space.npstr.wolfia.utils.GitRepoState;
+import space.npstr.wolfia.utils.discord.Emojis;
+import space.npstr.wolfia.utils.discord.RestActions;
 import space.npstr.wolfia.utils.discord.TextchatUtils;
 
-import javax.annotation.Nonnull;
-import java.util.concurrent.ScheduledExecutorService;
-
 /**
- * Created by napster on 10.05.18.
+ *  //general list of todos etc
+ *  //todo rename role pm/dm -> rolecard
  */
 @SpringBootApplication(exclude = { //we handle these ourselves
         DataSourceAutoConfiguration.class,
@@ -54,15 +57,18 @@ public class Launcher implements ApplicationRunner {
     @SuppressWarnings("NullableProblems")
     private static BotContext botContext;
 
-    private final ShardManager shardManager;
-    private final DiscordEntityProvider discordEntityProvider;
     private final ThreadPoolCollector poolMetrics;
-    private final ScheduledExecutorService jdaThreadPool;
+    private final WolfiaConfig wolfiaConfig;
+    @SuppressWarnings({"FieldCanBeLocal", "unused", "squid:S1068"}) //see EagerLoader
+    private final EagerLoader eagerLoader;
+    private final BotStatusLogger botStatusLogger;
+    private final ShardManager shardManager;
 
     public static BotContext getBotContext() {
         return botContext;
     }
 
+    @SuppressWarnings("squid:S106") // printing to sout is fine here
     public static void main(String[] args) {
         //just post the info to the console
         if (args.length > 0 &&
@@ -79,6 +85,7 @@ public class Launcher implements ApplicationRunner {
 
         System.setProperty("spring.config.name", "wolfia");
         SpringApplication app = new SpringApplication(Launcher.class);
+        app.setAdditionalProfiles("secrets");
         app.addListeners(event -> {
             if (event instanceof ApplicationEnvironmentPreparedEvent) {
                 log.info(getVersionInfo());
@@ -86,34 +93,50 @@ public class Launcher implements ApplicationRunner {
             if (event instanceof ApplicationFailedEvent) {
                 final ApplicationFailedEvent failed = (ApplicationFailedEvent) event;
                 log.error("Application failed", failed.getException());
+                System.exit(ShutdownHandler.EXIT_CODE_RESTART);
             }
         });
         app.run(args);
     }
 
-    public Launcher(final BotContext botContext, final ShardManager shardManager,
-                    final DiscordEntityProvider discordEntityProvider, final CommRegistry commRegistry,
-                    final ThreadPoolCollector poolMetrics, final ScheduledExecutorService jdaThreadPool) {
+    public Launcher(BotContext botContext, ThreadPoolCollector poolMetrics, WolfiaConfig wolfiaConfig,
+                    EagerLoader eagerLoader, BotStatusLogger botStatusLogger, ShardManager shardManager) {
         Launcher.botContext = botContext;
-        this.shardManager = shardManager;
-        this.discordEntityProvider = discordEntityProvider;
         this.poolMetrics = poolMetrics;
-        this.jdaThreadPool = jdaThreadPool;
-        commRegistry.init(discordEntityProvider, poolMetrics);
+        this.wolfiaConfig = wolfiaConfig;
+        this.eagerLoader = eagerLoader;
+        this.botStatusLogger = botStatusLogger;
+        this.shardManager = shardManager;
     }
 
     @Override
     public void run(final ApplicationArguments args) throws Exception {
-        Wolfia.start(this.shardManager, this.discordEntityProvider, this.poolMetrics, this.jdaThreadPool);
+        this.poolMetrics.addPool("restActions", (ScheduledThreadPoolExecutor) RestActions.restService);
+        this.botStatusLogger.log(Emojis.ROCKET, "Starting...");
+        if (this.wolfiaConfig.isDebug())
+            log.info("Running DEBUG configuration");
+        else
+            log.info("Running PRODUCTION configuration");
+
+        while (!allShardsUp()) {
+            Thread.sleep(100);
+        }
+        this.botStatusLogger.log(Emojis.ONE_HUNDRED, "All shards connected!");
+    }
+
+    private boolean allShardsUp() {
+        if (this.shardManager.getShardCache().size() < this.shardManager.getShardsTotal()) {
+            return false;
+        }
+
+        return this.shardManager.getShardCache().stream().allMatch(shard -> shard.getStatus() == JDA.Status.CONNECTED);
     }
 
     @Nonnull
     private static String getVersionInfo() {
-        return art
+        return ART
                 + "\n"
                 + "\n\tVersion:       " + App.VERSION
-                + "\n\tBuild:         " + App.BUILD_NUMBER
-                + "\n\tBuild time:    " + TextchatUtils.toBerlinTime(App.BUILD_TIME)
                 + "\n\tCommit:        " + GitRepoState.getGitRepositoryState().commitIdAbbrev + " (" + GitRepoState.getGitRepositoryState().branch + ")"
                 + "\n\tCommit time:   " + TextchatUtils.toBerlinTime(GitRepoState.getGitRepositoryState().commitTime * 1000)
                 + "\n\tJVM:           " + System.getProperty("java.version")
@@ -122,7 +145,7 @@ public class Launcher implements ApplicationRunner {
     }
 
     //########## vanity
-    private static final String art = "\n"
+    private static final String ART = "\n"
             + "\n                              __"
             + "\n                            .d$$b"
             + "\n                           .' TO$;\\"

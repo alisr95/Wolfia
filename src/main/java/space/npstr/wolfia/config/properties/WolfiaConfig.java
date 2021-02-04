@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2018 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -20,9 +20,6 @@ package space.npstr.wolfia.config.properties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/**
- * Created by napster on 10.05.18.
- */
 @Component
 @ConfigurationProperties("wolfia")
 public class WolfiaConfig {
@@ -31,10 +28,14 @@ public class WolfiaConfig {
 
     private boolean debug = true;
     private String discordToken = "";
-    private long logChannelId = 0;
+    private String botstatusWebhook = "";
 
     public boolean isDebug() {
         return debug;
+    }
+
+    public boolean isProd() {
+        return !isDebug();
     }
 
     public void setDebug(boolean debug) {
@@ -49,15 +50,16 @@ public class WolfiaConfig {
         this.discordToken = discordToken;
     }
 
-    public long getLogChannelId() {
-        return logChannelId;
+    public String getBotstatusWebhook() {
+        return botstatusWebhook;
     }
 
-    public void setLogChannelId(long logChannelId) {
-        this.logChannelId = logChannelId;
+    public void setBotstatusWebhook(String botstatusWebhook) {
+        this.botstatusWebhook = botstatusWebhook;
     }
 
     public String getDefaultPrefix() {
         return isDebug() ? "d." : DEFAULT_PREFIX;
     }
+
 }

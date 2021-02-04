@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2018 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -20,14 +20,12 @@ package space.npstr.wolfia.config.properties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/**
- * Created by napster on 10.05.18.
- */
 @Component
 @ConfigurationProperties("database")
 public class DatabaseConfig {
 
     private String jdbcUrl = "";
+    private int asyncPoolSize = Runtime.getRuntime().availableProcessors() * 4;
 
     public String getJdbcUrl() {
         return jdbcUrl;
@@ -35,5 +33,13 @@ public class DatabaseConfig {
 
     public void setJdbcUrl(String jdbcUrl) {
         this.jdbcUrl = jdbcUrl;
+    }
+
+    public int getAsyncPoolSize() {
+        return asyncPoolSize;
+    }
+
+    public void setAsyncPoolSize(int asyncPoolSize) {
+        this.asyncPoolSize = asyncPoolSize;
     }
 }

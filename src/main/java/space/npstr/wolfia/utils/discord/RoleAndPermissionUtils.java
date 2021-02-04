@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -18,32 +18,28 @@
 package space.npstr.wolfia.utils.discord;
 
 
-import net.dv8tion.jda.core.Permission;
-import net.dv8tion.jda.core.entities.Channel;
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.IPermissionHolder;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.PermissionOverride;
-import net.dv8tion.jda.core.entities.Role;
-import net.dv8tion.jda.core.entities.TextChannel;
-import net.dv8tion.jda.core.requests.RestAction;
-import net.dv8tion.jda.core.requests.restaction.PermissionOverrideAction;
-import net.dv8tion.jda.core.utils.PermissionUtil;
-import space.npstr.wolfia.App;
-import space.npstr.wolfia.Wolfia;
-import space.npstr.wolfia.game.definitions.Scope;
-import space.npstr.wolfia.utils.UserFriendlyException;
-
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.GuildChannel;
+import net.dv8tion.jda.api.entities.IPermissionHolder;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.PermissionOverride;
+import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.requests.RestAction;
+import net.dv8tion.jda.api.requests.restaction.PermissionOverrideAction;
+import net.dv8tion.jda.internal.utils.PermissionUtil;
+import space.npstr.wolfia.App;
+import space.npstr.wolfia.game.definitions.Scope;
+import space.npstr.wolfia.utils.UserFriendlyException;
 
 /**
- * Created by npstr on 18.11.2016
- * <p>
  * This class is there to easy handling roles, like their creation, assignment to players, and granting and denying rights
  */
 public class RoleAndPermissionUtils {
@@ -64,21 +60,8 @@ public class RoleAndPermissionUtils {
     public static RestAction<Role> getOrCreateRole(final Guild guild, final String name) {
         final Optional<Role> r = guild.getRolesByName(name, true).stream()
                 .filter(role -> role.getName().equals(name)).findFirst();
-        return r.<RestAction<Role>>map(role -> new RestAction.EmptyRestAction<>(guild.getJDA(), role))
-                .orElseGet(() -> guild.getController().createRole().setName(name));
-    }
-
-    public static boolean hasPermissions(final Member member, final TextChannel channel, final Map<Scope, Permission> permissions) {
-        final ArrayList<Permission> guildPerms = new ArrayList<>();
-        final ArrayList<Permission> channelPerms = new ArrayList<>();
-        permissions.forEach((scope, permission) -> {
-            if (scope == Scope.GUILD) {
-                guildPerms.add(permission);
-            } else if (scope == Scope.CHANNEL) {
-                channelPerms.add(permission);
-            }
-        });
-        return member.hasPermission(guildPerms) && member.hasPermission(channel, channelPerms);
+        return r.<RestAction<Role>>map(role -> new EmptyRestAction<>(guild.getJDA(), role))
+                .orElseGet(() -> guild.createRole().setName(name));
     }
 
     public static boolean hasPermission(final Member member, final TextChannel channel, final Scope scope, final Permission permission) {
@@ -120,26 +103,26 @@ public class RoleAndPermissionUtils {
         final Member self = channel.getGuild().getSelfMember();
 
         //are we prohibited from editing permissions in this channel?
-        if (!hasExplicitPermission(self, channel, Scope.CHANNEL, Permission.MANAGE_PERMISSIONS)) {
+        if (!hasExplicitPermission(self, channel, Scope.CHANNEL, Permission.MANAGE_ROLES)) {
 
             //are we prohibited from editing permissions in this guild?
-            if (!hasExplicitPermission(self, null, Scope.GUILD, Permission.MANAGE_PERMISSIONS)
+            if (!hasExplicitPermission(self, null, Scope.GUILD, Permission.MANAGE_ROLES)
                     //or do we have it on a guild scope, but it is denied for us in this channel?
-                    || !hasPermission(self, channel, Scope.CHANNEL, Permission.MANAGE_PERMISSIONS)) {
-                throw new UserFriendlyException(String.format("Please allow me to `%s` in this channel so I " +
+                    || !hasPermission(self, channel, Scope.CHANNEL, Permission.MANAGE_ROLES)) {
+                throw new UserFriendlyException(String.format("Please allow me to `%s` so I " +
                                 "can set myself up to play games and format my posts.%nWant to know what I need and why? Follow this link: %s",
-                        Permission.MANAGE_PERMISSIONS.getName(), App.DOCS_LINK + "#permissions"));
+                        Permission.MANAGE_ROLES.getName(), App.DOCS_LINK + "#permissions"));
 
             } else {
                 //allow ourselves to edit permissions in this channel
                 //it is ok to use complete and some waiting in here as this is expected to be run rarely (initial setups only)
-                grant(channel, self, Permission.MANAGE_PERMISSIONS).complete();
+                grant(channel, self, Permission.MANAGE_ROLES).complete();
 
                 //give it some time to propagate to discord and JDA since we are about to use these permissions
                 final long maxTimeToWait = 10000;
                 final long started = System.currentTimeMillis();
                 try {
-                    while (!hasExplicitPermission(self, channel, Scope.CHANNEL, Permission.MANAGE_PERMISSIONS)) {
+                    while (!hasExplicitPermission(self, channel, Scope.CHANNEL, Permission.MANAGE_ROLES)) {
                         if (System.currentTimeMillis() - started > maxTimeToWait) {
                             throw new UserFriendlyException("I failed to give myself the required permissions. Please read "
                                     + App.DOCS_LINK + "#permissions or reinvite me.");
@@ -160,27 +143,24 @@ public class RoleAndPermissionUtils {
 
     //i personally allow this thing to be ugly
     @Nonnull
-    private static RestAction<?> setPermissionsInChannelForRoleOrMember(@Nonnull final Channel channel,
-                                                                        @Nonnull final IPermissionHolder memberOrRole,
+    private static RestAction<?> setPermissionsInChannelForRoleOrMember(@Nonnull final GuildChannel channel,
+                                                                        @Nullable final IPermissionHolder memberOrRole,
                                                                         @Nonnull final PermissionAction action,
                                                                         @Nonnull final Permission... permissions) {
-        final PermissionOverride po;
-        if (memberOrRole instanceof Role) {
-            po = channel.getPermissionOverride((Role) memberOrRole);
-        } else if (memberOrRole instanceof Member) {
-            po = channel.getPermissionOverride((Member) memberOrRole);
-        } else {
-            log.warn("Unsupported class of IPermissionHolder detected: {}, returning an empty action", memberOrRole);
-            return new RestAction.EmptyRestAction<>(channel.getJDA(), null);
+
+        if (memberOrRole == null) {
+            log.warn("PermissionHolder is null, returning an empty action");
+            return new EmptyRestAction<>(channel.getJDA(), null);
         }
 
-        final RestAction ra;
+        final PermissionOverride po = channel.getPermissionOverride(memberOrRole);
+        final RestAction<?> ra;
         if (po != null) {
             switch (action) {
                 case GRANT:
                     //do nothing if the permission override already grants the permission
                     if (po.getAllowed().containsAll(Arrays.asList(permissions))) {
-                        ra = new RestAction.EmptyRestAction<>(channel.getJDA(), null);
+                        ra = new EmptyRestAction<>(channel.getJDA(), null);
                     } else {
                         ra = po.getManager().grant(permissions);
                     }
@@ -188,7 +168,7 @@ public class RoleAndPermissionUtils {
                 case DENY:
                     //do nothing if the permission override already denies the permission
                     if (po.getDenied().containsAll(Arrays.asList(permissions))) {
-                        ra = new RestAction.EmptyRestAction<>(channel.getJDA(), null);
+                        ra = new EmptyRestAction<>(channel.getJDA(), null);
                     } else {
                         ra = po.getManager().deny(permissions);
                     }
@@ -210,12 +190,7 @@ public class RoleAndPermissionUtils {
                     throw new IllegalArgumentException("Unknown PermissionAction passed: " + action.name());
             }
         } else {
-            final PermissionOverrideAction poa;
-            if (memberOrRole instanceof Role) {
-                poa = channel.createPermissionOverride((Role) memberOrRole);
-            } else {
-                poa = channel.createPermissionOverride((Member) memberOrRole);
-            }
+            final PermissionOverrideAction poa = channel.createPermissionOverride(memberOrRole);
             switch (action) {
                 case GRANT:
                     ra = poa.setAllow(permissions);
@@ -225,7 +200,7 @@ public class RoleAndPermissionUtils {
                     break;
                 case CLEAR:
                     //do nothing if we are trying to clear a nonexisting permission override
-                    ra = new RestAction.EmptyRestAction<>(channel.getJDA(), null);
+                    ra = new EmptyRestAction<>(channel.getJDA(), null);
                     break;
                 default:
                     throw new IllegalArgumentException("Unknown PermissionAction passed: " + action.name());
@@ -242,42 +217,19 @@ public class RoleAndPermissionUtils {
      * @param permissions
      *         Permissions that shall be granted/denied to the member/role
      */
-    public static RestAction<?> grant(@Nonnull final Channel channel, @Nonnull final IPermissionHolder memberOrRole,
+    public static RestAction<?> grant(@Nonnull final GuildChannel channel, @Nullable final IPermissionHolder memberOrRole,
                                       @Nonnull final Permission... permissions) {
         return setPermissionsInChannelForRoleOrMember(channel, memberOrRole, PermissionAction.GRANT, permissions);
     }
 
-    public static RestAction<?> deny(@Nonnull final Channel channel, @Nonnull final IPermissionHolder memberOrRole,
+    public static RestAction<?> deny(@Nonnull final GuildChannel channel, @Nullable final IPermissionHolder memberOrRole,
                                      @Nonnull final Permission... permissions) {
         return setPermissionsInChannelForRoleOrMember(channel, memberOrRole, PermissionAction.DENY, permissions);
     }
 
-    public static RestAction<?> clear(@Nonnull final Channel channel, @Nonnull final IPermissionHolder memberOrRole,
+    public static RestAction<?> clear(@Nonnull final GuildChannel channel, @Nullable final IPermissionHolder memberOrRole,
                                       @Nonnull final Permission... permissions) {
         return setPermissionsInChannelForRoleOrMember(channel, memberOrRole, PermissionAction.CLEAR, permissions);
-    }
-
-    public static RestAction<Void> deleteIfCleared(final PermissionOverride permissionOverride) {
-        //remove the whole override if it doesnt actually override any permission anymore
-        if (permissionOverride != null && permissionOverride.getAllowed().isEmpty() && permissionOverride.getDenied().isEmpty()) {
-            return permissionOverride.delete();
-        } else {
-            return new RestAction.EmptyRestAction<>(Wolfia.getFirstJda(), null);
-        }
-    }
-
-    /**
-     * @param g
-     *         Guild where the Role shall be deleted
-     * @param name
-     *         Name of the Role to be deleted. All roles with this name will be deleted
-     */
-    public static void deleteRole(@Nonnull final Guild g, final String name) {
-        for (final Role r : g.getRolesByName(name, true)) {
-            if (r.getName().equals(name)) {
-                r.getManager().getRole().delete().complete();
-            }
-        }
     }
 
 }

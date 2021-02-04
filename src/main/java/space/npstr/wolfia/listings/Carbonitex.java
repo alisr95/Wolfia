@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,20 +17,15 @@
 
 package space.npstr.wolfia.listings;
 
-import net.dv8tion.jda.core.JDA;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.JDA;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import org.json.JSONObject;
 import space.npstr.wolfia.App;
 import space.npstr.wolfia.Launcher;
-import space.npstr.wolfia.Wolfia;
 
-import javax.annotation.Nonnull;
-
-/**
- * Created by napster on 17.11.17.
- */
 public class Carbonitex extends Listing {
 
     //https://www.carbonitex.net/
@@ -44,7 +39,7 @@ public class Carbonitex extends Listing {
     protected String createPayload(@Nonnull final JDA jda) {
         return new JSONObject()
                 .put("key", Launcher.getBotContext().getListingsConfig().getCarbonitexKey())
-                .put("servercount", Wolfia.getGuildsAmount())
+                .put("servercount", Launcher.getBotContext().getShardManager().getGuildCache().size())
                 .toString();
     }
 

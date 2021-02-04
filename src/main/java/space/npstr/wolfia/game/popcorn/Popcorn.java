@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,21 +17,30 @@
 
 package space.npstr.wolfia.game.popcorn;
 
-import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.Permission;
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.TextChannel;
-import space.npstr.sqlsauce.DatabaseException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongConsumer;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.TextChannel;
 import space.npstr.wolfia.Launcher;
-import space.npstr.wolfia.Wolfia;
-import space.npstr.wolfia.commands.CommRegistry;
 import space.npstr.wolfia.commands.CommandContext;
+import space.npstr.wolfia.commands.game.RolePmCommand;
 import space.npstr.wolfia.commands.ingame.ShootCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
-import space.npstr.wolfia.db.entities.stats.ActionStats;
-import space.npstr.wolfia.db.entities.stats.GameStats;
-import space.npstr.wolfia.db.entities.stats.PlayerStats;
-import space.npstr.wolfia.db.entities.stats.TeamStats;
+import space.npstr.wolfia.domain.stats.ActionStats;
+import space.npstr.wolfia.domain.stats.GameStats;
+import space.npstr.wolfia.domain.stats.PlayerStats;
+import space.npstr.wolfia.domain.stats.TeamStats;
 import space.npstr.wolfia.events.ReactionListener;
 import space.npstr.wolfia.game.Game;
 import space.npstr.wolfia.game.GameUtils;
@@ -49,23 +58,11 @@ import space.npstr.wolfia.utils.discord.Emojis;
 import space.npstr.wolfia.utils.discord.RestActions;
 import space.npstr.wolfia.utils.discord.RoleAndPermissionUtils;
 import space.npstr.wolfia.utils.discord.TextchatUtils;
-import space.npstr.wolfia.utils.log.DiscordLogger;
 
-import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-
+import static java.util.Objects.requireNonNull;
 import static space.npstr.wolfia.game.GameInfo.GameMode;
 
 /**
- * Created by npstr on 22.10.2016
- * <p>
  * The Popcorn game logic is in here.
  * This is organized after a thing that almost looks like a state machine that I drew up on my whiteboard.
  * Here's a picture:
@@ -83,11 +80,11 @@ public class Popcorn extends Game {
     private long gunBearer = -1;
 
     @Override
-    public void setDayLength(final long dayLength, final TimeUnit timeUnit) {
+    public void setDayLength(final Duration dayLength) {
         if (this.running) {
             throw new IllegalStateException("Cannot change day length externally while the game is running");
         }
-        this.dayLengthMillis = timeUnit.toMillis(dayLength);
+        this.dayLengthMillis = dayLength.toMillis();
     }
 
 
@@ -115,6 +112,7 @@ public class Popcorn extends Game {
         try {
             gunHolder = getPlayer(this.gunBearer).bothNamesFormatted();
         } catch (final IllegalGameStateException ignored) {
+            // ignored
         }
         neb.addField(Emojis.GUN + " holder", gunHolder, true);
 
@@ -135,8 +133,7 @@ public class Popcorn extends Game {
     }
 
     @Override
-    public synchronized void start(final long channelId, final GameMode mode, final Set<Long> innedPlayers)
-            throws UserFriendlyException, DatabaseException {
+    public synchronized void start(final long channelId, final GameMode mode, final Set<Long> innedPlayers) {
         try {//wrap into our own exceptions
             doArgumentChecksAndSet(channelId, mode, innedPlayers);
         } catch (final IllegalArgumentException e) {
@@ -153,7 +150,7 @@ public class Popcorn extends Game {
 
         //get a hold of a private server...
         if (this.mode != GameMode.WILD) {
-            this.wolfChat = allocatePrivateGuild();
+            this.wolfChat = allocatePrivateRoom();
             this.wolfChat.beginUsage(getWolvesIds());
         }
 
@@ -180,6 +177,9 @@ public class Popcorn extends Game {
                 rolePm.append("If you get shot, you will die. If all wolves get shot, you lose\n");
                 rolePm.append(wolfteamNames);
                 rolePm.append(wolfchatInvite);
+                if (this.mode != GameMode.WILD) {
+                    addToBaddieGuild(player);
+                }
             }
             rolePm.append(guildChannelAndInvite);
 
@@ -188,15 +188,15 @@ public class Popcorn extends Game {
                     e -> RestActions.sendMessage(gameChannel, String.format(
                             "%s, **I cannot send you a private message**, please adjust your privacy settings " +
                                     "and/or unblock me, then issue `%s` to receive your role PM.",
-                            player.asMention(), WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_ROLEPM))
+                            player.asMention(), WolfiaConfig.DEFAULT_PREFIX + RolePmCommand.TRIGGER))
             );
         }
 
         final Guild g = gameChannel.getGuild();
         //set up stats objects
         this.gameStats = new GameStats(g.getIdLong(), g.getName(), this.channelId, gameChannel.getName(),
-                Games.POPCORN, this.mode.name(), this.players.size());
-        final Map<Alignments, TeamStats> teams = new HashMap<>();
+                Games.POPCORN, this.mode, this.players.size());
+        final Map<Alignments, TeamStats> teams = new EnumMap<>(Alignments.class);
         for (final Player player : this.players) {
             final Alignments alignment = player.alignment;
             final TeamStats team = teams.getOrDefault(alignment,
@@ -213,15 +213,14 @@ public class Popcorn extends Game {
         }
 
         // - start the game
-        Games.set(this);
-        DiscordLogger.getLogger().log("%s `%s` Game started in guild **%s** `%s`, channel **#%s** `%s`, **%s %s %s** players",
-                Emojis.VIDEO_GAME, TextchatUtils.berlinTime(),
+        String info = Games.getInfo(this).textRep();
+        log.info("Game started in guild {} {}, channel #{} {}, {} {} {} players",
                 g.getName(), g.getIdLong(), gameChannel.getName(), gameChannel.getIdLong(),
-                Games.getInfo(this).textRep(), mode.textRep, this.players.size());
+                info, mode.textRep, this.players.size());
         this.running = true;
-        this.gameStats.addAction(simpleAction(Wolfia.getSelfUser().getIdLong(), Actions.GAMESTART, -1));
+        this.gameStats.addAction(simpleAction(this.selfUserId, Actions.GAMESTART, -1));
         //mention the players in the thread
-        RestActions.sendMessage(gameChannel, String.format("Game has started!\n%s\n**%s** wolves are alive!",
+        RestActions.sendMessage(gameChannel, String.format("Game has started!%n%s%n**%s** wolves are alive!",
                 listLivingPlayers(), getLivingWolves().size()));
         distributeGun();
     }
@@ -235,7 +234,7 @@ public class Popcorn extends Game {
             if (target == null) return false;
             return shoot(shooter, target.userId);
         } else {
-            context.replyWithMention("the '" + context.command.name + "' command is not part of this game.");
+            context.replyWithMention("the '" + context.command.getTrigger() + "' command is not part of this game.");
             return false;
         }
     }
@@ -256,7 +255,7 @@ public class Popcorn extends Game {
 
     private void giveGun(final long userId) {
         this.gunBearer = userId;
-        this.gameStats.addAction(simpleAction(Wolfia.getSelfUser().getIdLong(), Actions.GIVEGUN, userId));
+        this.gameStats.addAction(simpleAction(this.selfUserId, Actions.GIVEGUN, userId));
         RestActions.sendMessage(fetchGameChannel(), String.format("%s has received the %s !",
                 TextchatUtils.userAsMention(userId), Emojis.GUN));
         startDay();
@@ -265,8 +264,8 @@ public class Popcorn extends Game {
     private void startDay() {
         this.day++;
         this.dayStarted = System.currentTimeMillis();
-        this.gameStats.addAction(simpleAction(Wolfia.getSelfUser().getIdLong(), Actions.DAYSTART, -1));
-        final TextChannel channel = Wolfia.getTextChannelById(this.channelId);
+        this.gameStats.addAction(simpleAction(this.selfUserId, Actions.DAYSTART, -1));
+        final TextChannel channel = Launcher.getBotContext().getShardManager().getTextChannelById(this.channelId);
         if (channel != null) { //todo handle properly
             RestActions.sendMessage(channel, getStatus().build());
             RestActions.sendMessage(channel, String.format("Day %s started! %s, you have %s minutes to shoot someone.",
@@ -311,11 +310,11 @@ public class Popcorn extends Game {
         final TextChannel gameChannel = fetchGameChannel();
         final Guild g = gameChannel.getGuild();
 
-        this.gameStats.addAction(simpleAction(Wolfia.getSelfUser().getIdLong(), Actions.DAYEND, -1));
+        this.gameStats.addAction(simpleAction(this.selfUserId, Actions.DAYEND, -1));
         RestActions.sendMessage(gameChannel, String.format("Day %s has ended!", this.day));
 
         //an operation that shall be run if the game isn't over; doing this so we can ge the output from he below if construct sent
-        final Consumer<Long> doIfGameIsntOver;
+        final LongConsumer doIfGameIsntOver;
         if (reason == DayEndReason.TIMER) {
             RestActions.sendMessage(gameChannel, String.format(
                     "%s took too long to decide who to shoot! They died and the %s will be redistributed.",
@@ -359,7 +358,7 @@ public class Popcorn extends Game {
     private boolean shoot(final long shooterId, final long targetId) throws IllegalGameStateException {
         final TextChannel gameChannel = fetchGameChannel();
         //check various conditions for the shot being legal
-        if (targetId == Wolfia.getSelfUser().getIdLong()) {
+        if (targetId == this.selfUserId) {
             RestActions.sendMessage(gameChannel, String.format("%s lol can't %s me.",
                     TextchatUtils.userAsMention(shooterId), Emojis.GUN));
             return false;
@@ -447,15 +446,15 @@ public class Popcorn extends Game {
                 Popcorn.this.executor.execute(() -> {
                             try {
                                 final Operation ifLegal = () -> Popcorn.this.gameStats.addAction(simpleAction(
-                                        Wolfia.getSelfUser().getIdLong(), Actions.MODKILL, this.game.gunBearer));
+                                        Popcorn.this.selfUserId, Actions.MODKILL, this.game.gunBearer));
                                 this.game.endDay(DayEndReason.TIMER, this.game.gunBearer, -1, ifLegal);
                             } catch (final DayEndedAlreadyException ignored) {
+                                // ignored
                             }
                         }
                 );
             } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return;
             }
         }
     }
@@ -466,8 +465,8 @@ public class Popcorn extends Game {
     }
 
     class GunDistribution {
-        private static final long TIME_TO_DISTRIBUTE_GUN_MILLIS = 1000 * 60; //1 minute
-        private boolean done = false;
+        private static final long TIME_TO_DISTRIBUTE_GUN_MILLIS = 1000L * 60; //1 minute
+        private boolean done;
         private final Map<Long, Long> votes = new LinkedHashMap<>();//using linked to keep first votes at the top
         private final long startedMillis = System.currentTimeMillis();
 
@@ -484,7 +483,7 @@ public class Popcorn extends Game {
                             prepareGunDistributionEmbed(options, new HashMap<>(this.votes)).build(),
                             m -> {
                                 options.keySet().forEach(emoji -> m.addReaction(emoji).queue(null, RestActions.defaultOnFail()));
-                                Wolfia.addEventListener(new ReactionListener(m,
+                                requireNonNull(m.getJDA().getShardManager()).addEventListener(new ReactionListener(m,
                                         //filter: only living wolves may vote
                                         Popcorn.this::isLivingWolf,
                                         //on reaction
@@ -539,14 +538,14 @@ public class Popcorn extends Game {
             try {
                 playerName = getPlayer(getsGun).bothNamesFormatted();
             } catch (final IllegalGameStateException ignored) {
+                // ignored
             }
-            final TextChannel baddieChannel = Popcorn.this.fetchBaddieChannel();
-            RestActions.sendMessage(baddieChannel, //provided invite link may be empty
-                    String.format(out + "\n@here, %s gets the %s! Game about to start/continue, get back to the main chat.\n%s",
-                            playerName, Emojis.GUN,
-                            TextchatUtils.getOrCreateInviteLinkForChannel(baddieChannel)));
+            RestActions.sendMessage(fetchBaddieChannel(), //provided invite link may be empty
+                    String.format("%s%n@here, %s gets the %s! Game about to start/continue, get back to the main chat.%n%s",
+                            out, playerName, Emojis.GUN,
+                            TextchatUtils.getOrCreateInviteLinkForChannel(fetchGameChannel())));
             //give wolves 10 seconds to get back into the chat
-            Popcorn.this.executor.schedule(() -> giveGun(getsGun), 10, TimeUnit.SECONDS);
+            Popcorn.this.scheduleIfGameStillRuns(() -> giveGun(getsGun), Duration.ofSeconds(10));
         }
 
         private EmbedBuilder prepareGunDistributionEmbed(final Map<String, Player> livingVillage,

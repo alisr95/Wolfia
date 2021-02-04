@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2019 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -19,15 +19,16 @@ package space.npstr.wolfia.config;
 
 import io.prometheus.client.cache.caffeine.CacheMetricsCollector;
 import io.prometheus.client.logback.InstrumentedAppender;
-import net.dv8tion.jda.bot.sharding.ShardManager;
+import java.util.concurrent.ScheduledExecutorService;
+import net.dv8tion.jda.api.sharding.ShardManager;
 import net.ttddyy.dsproxy.listener.SingleQueryCountHolder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import space.npstr.prometheus_extensions.QueryCountCollector;
 import space.npstr.prometheus_extensions.ThreadPoolCollector;
 import space.npstr.prometheus_extensions.jda.JdaMetrics;
-
-import java.util.concurrent.ScheduledExecutorService;
+import space.npstr.wolfia.system.metrics.MetricsRegistry;
 
 @Configuration
 public class MetricsConfiguration {
@@ -59,7 +60,9 @@ public class MetricsConfiguration {
     }
 
     @Bean
-    public JdaMetrics jdaMetrics(ShardManager shardManager, ScheduledExecutorService scheduler) {
-        return new JdaMetrics(shardManager, scheduler);
+    public JdaMetrics jdaMetrics(ShardManager shardManager, @Qualifier("jdaThreadPool") ScheduledExecutorService scheduler,
+                                 MetricsRegistry metricsRegistry) {
+
+        return new JdaMetrics(shardManager, scheduler, metricsRegistry.getRegistry());
     }
 }

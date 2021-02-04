@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,28 +17,38 @@
 
 package space.npstr.wolfia.commands.util;
 
-import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.JDAInfo;
-import net.dv8tion.jda.core.entities.User;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.JDAInfo;
+import net.dv8tion.jda.api.entities.ApplicationInfo;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.sharding.ShardManager;
 import space.npstr.wolfia.App;
-import space.npstr.wolfia.Wolfia;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.Context;
-import space.npstr.wolfia.game.definitions.Games;
+import space.npstr.wolfia.commands.MessageContext;
+import space.npstr.wolfia.commands.PublicCommand;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
+import space.npstr.wolfia.system.ApplicationInfoProvider;
 
-import javax.annotation.Nonnull;
+import static java.util.Objects.requireNonNull;
 
+@Command
+public class InfoCommand implements BaseCommand, PublicCommand {
 
-/**
- * Created by napster on 28.05.17.
- * <p>
- * Thanks Fred
- */
-public class InfoCommand extends BaseCommand {
+    public static final String TRIGGER = "info";
 
-    public InfoCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    private final GameRegistry gameRegistry;
+
+    public InfoCommand(GameRegistry gameRegistry) {
+        this.gameRegistry = gameRegistry;
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
     }
 
     @Nonnull
@@ -50,7 +60,17 @@ public class InfoCommand extends BaseCommand {
 
     @Override
     public boolean execute(@Nonnull final CommandContext context) {
-        final User owner = Wolfia.getUserById(App.OWNER_ID);
+        ShardManager shardManager = context.getJda().getShardManager();
+        requireNonNull(shardManager).retrieveApplicationInfo().submit()
+                .thenApply(ApplicationInfo::getDescription)
+                .thenAccept(description -> execute(context, description));
+        return true;
+    }
+
+    private void execute(@Nonnull final CommandContext context, String description) {
+        ShardManager shardManager = requireNonNull(context.getJda().getShardManager());
+        var appInfoProvider = new ApplicationInfoProvider(context.getJda().getShardManager());
+        final User owner = appInfoProvider.getOwner();
         String maStats = "```\n";
         maStats += "Reserved memory:        " + Runtime.getRuntime().totalMemory() / 1000000 + "MB\n";
         maStats += "-> Of which is used:    " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1000000 + "MB\n";
@@ -60,28 +80,26 @@ public class InfoCommand extends BaseCommand {
 
 
         String botInfo = "```\n";
-        botInfo += "Games being played:     " + Games.getRunningGamesCount() + "\n";
-        botInfo += "Known servers:          " + Wolfia.getGuildsAmount() + "\n";
-        botInfo += "Known users in servers: " + Wolfia.getUsersAmount() + "\n";
+        botInfo += "Games being played:     " + this.gameRegistry.getRunningGamesCount() + "\n";
+        botInfo += "Known servers:          " + shardManager.getGuildCache().size() + "\n";
+        //UnifiedShardCacheViewImpl#stream calls distinct for us
+        botInfo += "Known users in servers: " + shardManager.getUserCache().stream().count() + "\n";
         botInfo += "Version:                " + App.VERSION + "\n";
-        botInfo += "JDA responses total:    " + Wolfia.getResponseTotal() + "\n";
+        botInfo += "JDA responses total:    " + shardManager.getShards().stream().mapToLong(JDA::getResponseTotal).sum() + "\n";
         botInfo += "JDA version:            " + JDAInfo.VERSION + "\n";
-        if (owner != null) {
-            botInfo += "Bot owner:              " + owner.getName() + "#" + owner.getDiscriminator() + "\n";
-        }
+        botInfo += "Bot owner:              " + owner.getName() + "#" + owner.getDiscriminator() + "\n";
         botInfo += "```";
 
-        final EmbedBuilder eb = Context.getDefaultEmbedBuilder();
-        final User self = Wolfia.getSelfUser();
+        final EmbedBuilder eb = MessageContext.getDefaultEmbedBuilder();
+        final User self = context.event.getJDA().getSelfUser();
         eb.setThumbnail(self.getEffectiveAvatarUrl());
         eb.setAuthor(self.getName(), App.SITE_LINK, self.getEffectiveAvatarUrl());
         eb.setTitle(self.getName() + " General Stats", App.SITE_LINK);
-        eb.setDescription(App.getDescription());
+        eb.setDescription(description);
         eb.addField("Bot info", botInfo, false);
         eb.addField("Machine stats", maStats, false);
 
 
         context.reply(eb.build());
-        return true;
     }
 }

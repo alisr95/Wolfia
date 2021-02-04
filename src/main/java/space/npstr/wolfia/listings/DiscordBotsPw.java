@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,7 +17,8 @@
 
 package space.npstr.wolfia.listings;
 
-import net.dv8tion.jda.core.JDA;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.JDA;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -25,11 +26,6 @@ import org.json.JSONObject;
 import space.npstr.wolfia.App;
 import space.npstr.wolfia.Launcher;
 
-import javax.annotation.Nonnull;
-
-/**
- * Created by napster on 06.10.17.
- */
 public class DiscordBotsPw extends Listing {
 
     //https://bots.discord.pw

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,27 +17,39 @@
 
 package space.npstr.wolfia.commands.game;
 
-import space.npstr.sqlsauce.DatabaseException;
-import space.npstr.wolfia.Launcher;
+import javax.annotation.Nonnull;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
 import space.npstr.wolfia.commands.GuildCommandContext;
-import space.npstr.wolfia.db.entities.PrivateGuild;
-import space.npstr.wolfia.db.entities.Setup;
-import space.npstr.wolfia.game.definitions.Games;
+import space.npstr.wolfia.commands.PublicCommand;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.GameStarter;
+import space.npstr.wolfia.domain.game.GameRegistry;
+import space.npstr.wolfia.domain.room.PrivateRoomService;
 import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 
-import javax.annotation.Nonnull;
-
 /**
- * Created by npstr on 14.09.2016
- * <p>
- * any signed up player can use this command to start a game
+ * Any signed up player can use this command to start a game
  */
-public class StartCommand extends BaseCommand {
+@Command
+public class StartCommand implements BaseCommand, PublicCommand {
 
-    public StartCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public static final String TRIGGER = "start";
+
+    private final GameStarter gameStarter;
+    private final PrivateRoomService privateRoomService;
+    private final GameRegistry gameRegistry;
+
+    public StartCommand(GameStarter gameStarter, PrivateRoomService privateRoomService, GameRegistry gameRegistry) {
+
+        this.gameStarter = gameStarter;
+        this.privateRoomService = privateRoomService;
+        this.gameRegistry = gameRegistry;
+    }
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
     }
 
     @Nonnull
@@ -48,30 +60,24 @@ public class StartCommand extends BaseCommand {
     }
 
     @Override
-    public boolean execute(@Nonnull final CommandContext commandContext)
-            throws IllegalGameStateException, DatabaseException {
-
+    public boolean execute(@Nonnull final CommandContext commandContext) throws IllegalGameStateException {
 
         final GuildCommandContext context = commandContext.requireGuild();
         if (context == null) {
             return false;
         }
 
-        if (Games.get(context.textChannel) != null) {
+        if (this.gameRegistry.get(context.textChannel) != null) {
             context.replyWithMention("please start the next game after the current one is over.");
             return false;
         }
 
         //check for private guilds where we dont want games to be started
-        if (PrivateGuild.isPrivateGuild(context.guild)) {
+        if (this.privateRoomService.guild(context.guild.getIdLong()).isPrivateRoom()) {
             context.replyWithMention("you can't play games in a private guild.");
             return false;
         }
 
-        Setup setup = Launcher.getBotContext().getDatabase().getWrapper().getOrCreate(Setup.key(context.textChannel.getIdLong()));
-        final boolean started = setup.startGame(context.invoker.getIdLong());
-        setup = Launcher.getBotContext().getDatabase().getWrapper().merge(setup);
-
-        return started;
+        return this.gameStarter.startGame(context);
     }
 }

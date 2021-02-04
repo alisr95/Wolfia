@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -18,19 +18,12 @@
 package space.npstr.wolfia.utils;
 
 /**
- * Created by napster on 22.06.17.
- * <p>
  * These Exceptions are allowed to happen, for example if the bot is misconfigured by the user,
  * and their content is save to be shown to users and considered part of the UX
  */
 public class UserFriendlyException extends RuntimeException {
 
     private static final long serialVersionUID = 4569619083608513524L;
-
-    //force creation with a message
-    private UserFriendlyException() {
-
-    }
 
     public UserFriendlyException(final String message, final Object... args) {
         super(String.format(message, args));

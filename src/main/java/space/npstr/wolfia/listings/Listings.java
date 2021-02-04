@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,36 +17,37 @@
 
 package space.npstr.wolfia.listings;
 
-import net.dv8tion.jda.core.JDA;
-import net.dv8tion.jda.core.events.ReadyEvent;
-import net.dv8tion.jda.core.events.guild.GuildJoinEvent;
-import net.dv8tion.jda.core.events.guild.GuildLeaveEvent;
-import net.dv8tion.jda.core.hooks.ListenerAdapter;
-import okhttp3.OkHttpClient;
-import space.npstr.prometheus_extensions.OkHttpEventCounter;
-import space.npstr.wolfia.Wolfia;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Future;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.events.ReadyEvent;
+import net.dv8tion.jda.api.events.guild.GuildJoinEvent;
+import net.dv8tion.jda.api.events.guild.GuildLeaveEvent;
+import okhttp3.OkHttpClient;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import space.npstr.prometheus_extensions.OkHttpEventCounter;
+import space.npstr.wolfia.game.tools.ExceptionLoggingExecutor;
 
 /**
- * Created by napster on 23.07.17.
- * <p>
  * Takes care of posting all our stats to various listing sites
  */
-public class Listings extends ListenerAdapter {
+@Component
+public class Listings {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Listings.class);
 
     //serves as both a set of registered listings and keeping track of ongoing tasks of posting stats
-    private final Map<Listing, Future> tasks = new HashMap<>();
+    private final Map<Listing, Future<?>> tasks = new HashMap<>();
+    private final ExceptionLoggingExecutor executor;
 
-    public Listings(OkHttpClient.Builder httpClientBuilder) {
+    public Listings(OkHttpClient.Builder httpClientBuilder, ExceptionLoggingExecutor executor) {
+        this.executor = executor;
         OkHttpClient httpClient = httpClientBuilder
                 .eventListener(new OkHttpEventCounter("listings"))
                 .build();
@@ -55,7 +56,7 @@ public class Listings extends ListenerAdapter {
         this.tasks.put(new Carbonitex(httpClient), null);
     }
 
-    private static boolean isTaskRunning(@Nullable final Future task) {
+    private static boolean isTaskRunning(@Nullable final Future<?> task) {
         return task != null && !task.isDone() && !task.isCancelled();
     }
 
@@ -68,33 +69,34 @@ public class Listings extends ListenerAdapter {
     }
 
     private synchronized void postStats(@Nonnull final Listing listing, @Nonnull final JDA jda) {
-        final Future task = this.tasks.get(listing);
+        final Future<?> task = this.tasks.get(listing);
         if (isTaskRunning(task)) {
             log.info("Skipping posting stats to {} since there is a task to do that running already.", listing.name);
             return;
         }
 
-        this.tasks.put(listing, Wolfia.executor.submit(() -> {
+        this.tasks.put(listing, this.executor.submit(() -> {
             try {
                 listing.postStats(jda);
             } catch (final InterruptedException e) {
                 log.error("Task to send stats to {} interrupted", listing.name, e);
+                Thread.currentThread().interrupt();
             }
         }));
     }
 
 
-    @Override
+    @EventListener
     public void onGuildJoin(final GuildJoinEvent event) {
         postAllStats(event.getJDA());
     }
 
-    @Override
+    @EventListener
     public void onGuildLeave(final GuildLeaveEvent event) {
         postAllStats(event.getJDA());
     }
 
-    @Override
+    @EventListener
     public void onReady(final ReadyEvent event) {
         postAllStats(event.getJDA());
     }

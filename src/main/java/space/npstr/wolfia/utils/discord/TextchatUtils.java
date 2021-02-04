@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,29 +17,26 @@
 
 package space.npstr.wolfia.utils.discord;
 
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.Invite;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.entities.TextChannel;
-import net.dv8tion.jda.core.entities.User;
-import net.dv8tion.jda.core.exceptions.PermissionException;
-import space.npstr.wolfia.utils.Operation;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import net.dv8tion.jda.api.MessageBuilder;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Invite;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.exceptions.PermissionException;
+import space.npstr.wolfia.utils.Operation;
 
 /**
- * Created by napster on 21.05.17.
- * <p>
  * Useful methods for the Discord chat and general working with Strings and outputs
  */
 public class TextchatUtils {
@@ -50,10 +47,10 @@ public class TextchatUtils {
             .withZone(ZoneId.of("Europe/Berlin"));
 
     public static final int MAX_MESSAGE_LENGTH = 2000;
-    public static final List<String> TRUE_TEXT = Collections.unmodifiableList(Arrays.asList("true", "yes", "enable",
-            "y", "on", "1", "positive", "+", "add", "start", "join", "ja"));
-    public static final List<String> FALSE_TEXT = Collections.unmodifiableList(Arrays.asList("false", "no", "disable",
-            "n", "off", "0", "negative", "-", "remove", "stop", "leave", "nein"));
+    public static final List<String> TRUE_TEXT = List.of("true", "yes", "enable", "y", "on", "1", "positive", "+",
+            "add", "start", "join", "ja");
+    public static final List<String> FALSE_TEXT = List.of("false", "no", "disable", "n", "off", "0", "negative", "-",
+            "remove", "stop", "leave", "nein");
 
     public static boolean isTrue(final String input) {
         return TRUE_TEXT.contains(input);
@@ -80,13 +77,15 @@ public class TextchatUtils {
     //so no worries about spammed invites in a channel
     public static String getOrCreateInviteLinkForChannel(final TextChannel channel, final Operation... onFail) {
         try {
-            return channel.createInvite().complete().getURL();
+            return channel.createInvite().complete().getUrl();
         } catch (final PermissionException ignored) {
+            // ignored
         }
         try {
-            final List<Invite> invites = channel.getInvites().complete();
-            if (!invites.isEmpty()) return invites.get(0).getURL();
+            final List<Invite> invites = channel.retrieveInvites().complete();
+            if (!invites.isEmpty()) return invites.get(0).getUrl();
         } catch (final PermissionException ignored) {
+            // ignored
         }
 
         // if we reached this point, we failed at creating an invite for this channel
@@ -198,16 +197,12 @@ public class TextchatUtils {
         return dtf.format(Instant.ofEpochMilli(epochMillis));
     }
 
-    public static String berlinTime() {
-        return toBerlinTime(System.currentTimeMillis());
-    }
-
     public static String toBerlinTime(final long epochMillis) {
         return TIME_IN_BERLIN.format(Instant.ofEpochMilli(epochMillis));
     }
 
     public static String defuseMentions(final String input) {
-        return input.replaceAll("@", "@" + ZERO_WIDTH_SPACE);
+        return input.replace("@", "@" + ZERO_WIDTH_SPACE);
     }
 
 
@@ -253,7 +248,7 @@ public class TextchatUtils {
     @Nonnull
     private static Message prefaceWithString(@Nonnull final String preface, @Nonnull final String msg) {
         final String message = ensureSpace(msg);
-        return RestActions.getMessageBuilder()
+        return new MessageBuilder()
                 .append(preface)
                 .append(",")
                 .append(message)
@@ -265,4 +260,6 @@ public class TextchatUtils {
     private static String ensureSpace(@Nonnull final String msg) {
         return msg.charAt(0) == ' ' ? msg : " " + msg;
     }
+
+    private TextchatUtils() {}
 }

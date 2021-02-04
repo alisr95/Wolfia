@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -18,32 +18,39 @@
 package space.npstr.wolfia.commands.util;
 
 
-import space.npstr.sqlsauce.DatabaseException;
+import java.util.List;
+import javax.annotation.Nonnull;
 import space.npstr.wolfia.App;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
+import space.npstr.wolfia.commands.PublicCommand;
+import space.npstr.wolfia.domain.Command;
 
-import javax.annotation.Nonnull;
+@Command
+public class InviteCommand implements BaseCommand, PublicCommand {
 
-/**
- * Created by napster on 21.11.17.
- */
-public class InviteCommand extends BaseCommand {
+    public static final String TRIGGER = "invite";
 
-    public InviteCommand(@Nonnull final String name, @Nonnull final String... aliases) {
-        super(name, aliases);
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
+    }
+
+    @Override
+    public List<String> getAliases() {
+        return List.of("inv");
     }
 
     @Nonnull
     @Override
-    protected String help() {
+    public String help() {
         return invocation()
                 + "\n#Post invite links for Wolfia and the Wolfia Lounge.";
     }
 
     @Override
-    public boolean execute(@Nonnull final CommandContext context) throws DatabaseException {
-        context.reply(String.format("**Wolfia Bot Invite**:\n<%s>\n**Wolfia Lounge**:\n%s",
+    public boolean execute(@Nonnull final CommandContext context) {
+        context.reply(String.format("**Wolfia Bot Invite**:%n<%s>%n**Wolfia Lounge**:%n%s",
                 App.INVITE_LINK, App.WOLFIA_LOUNGE_INVITE));
         return true;
     }

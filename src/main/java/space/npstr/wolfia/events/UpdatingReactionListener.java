@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,25 +17,22 @@
 
 package space.npstr.wolfia.events;
 
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent;
-import space.npstr.wolfia.Wolfia;
-
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.events.message.react.GenericMessageReactionEvent;
+import space.npstr.wolfia.Launcher;
 
 /**
- * Created by napster on 09.07.17.
- * <p>
  * This reaction listener will call for updates
  */
 public class UpdatingReactionListener extends ReactionListener {
 
     private final Consumer<Void> updateCallback;
-    private final ScheduledFuture updates;
+    private final ScheduledFuture<?> updates;
 
     /**
      * @param message              The message on which to listen for reactions
@@ -52,7 +49,7 @@ public class UpdatingReactionListener extends ReactionListener {
         super(message, filter, reactionCallback, selfDestructMillis, selfDestructCallback);
 
         this.updateCallback = updateCallback;
-        this.updates = Wolfia.executor.scheduleAtFixedRate(this::update, updateMillis - 1000, updateMillis, TimeUnit.MILLISECONDS);
+        this.updates = Launcher.getBotContext().getExecutor().scheduleAtFixedRate(this::update, updateMillis - 1000, updateMillis, TimeUnit.MILLISECONDS);
     }
 
     private void update() {

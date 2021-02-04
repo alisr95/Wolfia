@@ -20,7 +20,7 @@ services:
       - dockersock4traefik
 
   traefik:
-    image: traefik:v1.7-alpine
+    image: traefik:v2.1
     container_name: traefik
     restart: always
     ports:
@@ -35,54 +35,88 @@ services:
       - ./acme.json:/acme.json:rw
     labels:
       - "traefik.enable=true"
-      - "traefik.backend=traefik-dash"
       - "traefik.port=8080"
-      - "traefik.frontend.rule=Host:${DOMAIN};PathPrefixStrip:/traefik"
+      - "traefik.http.middlewares.metrics-auth.basicauth.users=${METRICS_LOGIN}"
+      - "traefik.http.middlewares.metrics-auth.basicauth.removeheader=true"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASH_LOGIN}"
+      - "traefik.http.middlewares.whitelist.ipwhitelist.sourcerange=${CF_WHITELIST},${UPTIMEROBOT_WHITELIST}"
+      - "traefik.http.routers.api.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.api.middlewares=traefik-auth@docker, whitelist@docker"
     command:
-      - --debug=false
-      - --logLevel=INFO
-      - --sendAnonymousUsage=true
-      - --defaultEntryPoints=https
-      - "--entryPoints=Name:https Address::443 TLS WhiteList.SourceRange:${CF_WHITELIST},${UPTIMEROBOT_WHITELIST} WhiteList.UseXForwardedFor:true"
-      - "--entryPoints=Name:traefik Address::8080 Auth.Basic.Users:${TRAEFIK_DASH_LOGIN} WhiteList.SourceRange:${CF_WHITELIST},${UPTIMEROBOT_WHITELIST} WhiteList.UseXForwardedFor:true"
-      - --api.dashboard=true
-      - --api.entryPoint=traefik
-      - --api.statistics=true
-      - --retry
-      - --docker.domain=${DOMAIN}
-      - "--docker.endpoint=tcp://dockerproxy:2375"
-      - --docker.watch=true
-      - --docker.exposedByDefault=false
-      - --acme.dnsChallenge.provider=cloudflare
-      - "--acme.domains=*.${DOMAIN},${DOMAIN}"
-      - --acme.email=${ACME_EMAIL}
-      - --acme.entryPoint=https
-      - --acme.onHostRule=false
-      - --acme.storage=acme.json
+      - "--log.level=info"
+      - "--accesslog=true"
+      - "--global.sendanonymoususage=true"
+      - "--entrypoints.https.address=:443"
+      - "--api.dashboard=true"
+      - "--api.debug=false"
+      - "--providers.docker.endpoint=tcp://dockerproxy:2375"
+      - "--providers.docker.watch=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.swarmmode=false"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=acme.json"
     environment:
       - CF_API_EMAIL=${CF_MAIL}
       - CF_API_KEY=${CF_KEY}
 
   db:
-    image: napstr/wolfia-postgres:master
+    image: napstr/poggres:12
     restart: always
     ports:
       - 127.0.0.1:5432:5432
     volumes:
-      - ./postgres-data:/var/lib/postgresql/data
+      - ./postgres-data/12/data:/var/lib/postgresql/data
     environment:
+      - POSTGRES_PASSWORD=${PG_PASS}
+      # See https://github.com/napstr/poggres#env-vars
       - ROLE=wolfia
+      - PASSWORD=${DB_PASS}
       - DB=wolfia
+      - EXTENSIONS=hstore
       - BACKUP_DB=wolfia
       - BACKUP_APPNAME=wolfia
+      - BACKUP_PASS=${BACKUP_ENCRYPTION_PASS}
       - BACKUP_BUCKET_DAILY=wolfia-backups-daily
       - BACKUP_BUCKET_WEEKLY=wolfia-backups-weekly
       - BACKUP_BUCKET_MONTHLY=wolfia-backups-monthly
       - BACKUP_ACCOUNT_ID=${B2_ACCOUNT_ID}
       - BACKUP_APP_KEY=${B2_APP_KEY}
 
+  redis:
+    image: redis:5-alpine
+    restart: always
+    entrypoint:
+      - redis-server
+      - --appendonly
+      - "yes"
+    ports:
+      - 127.0.0.1:6379:6379
+    volumes:
+      - ./redis-data:/data
+    sysctls:
+      - net.core.somaxconn=511   # container was spitting out a warning telling us to do this
+
+  redis-exporter:
+    image: oliver006/redis_exporter
+    restart: always
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - traefik
+      - default
+    labels:
+      - "traefik.docker.network=wolfia_traefik"
+      - "traefik.enable=true"
+      - "traefik.port=9121"
+      - "traefik.http.routers.redis-exporter-prom.rule=Host(`redis.${DOMAIN}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.redis-exporter-prom.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.redis-exporter-prom.middlewares=metrics-auth@docker, whitelist@docker"
+
   bot:
-    image: napstr/wolfia:ci-master
+    image: napstr/wolfia:master
     restart: always
     networks:
       - traefik
@@ -91,17 +125,17 @@ services:
       - "traefik.docker.network=wolfia_traefik"
       - "traefik.enable=true"
       - "traefik.port=4567"
-      - "traefik.metrics.backend=wolfia-metrics"
-      - "traefik.metrics.frontend.rule=Host:${DOMAIN};PathPrefix:/metrics"
-      - "traefik.metrics.frontend.auth.basic.users=${METRICS_LOGIN}"
-      - "traefik.metrics.frontend.auth.basic.removeHeader=true"
-    #      - "traefik.bot.backend=wolfia-bot"
-    #      - "traefik.bot.frontend.rule=Host:${DOMAIN};PathPrefix:/{path:(togglz|login|webhook)}"
+      - "traefik.http.routers.wolfia-metrics.rule=Host(`bot.${DOMAIN}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.wolfia-metrics.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wolfia-metrics.middlewares=metrics-auth@docker, whitelist@docker"
+      - "traefik.http.routers.bot.rule=Host(`bot.${DOMAIN}`)"
+      - "traefik.http.routers.bot.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.bot.middlewares=whitelist@docker"
     ports:
       - 127.0.0.1:4567:4567   # Wolfia web server
       - 127.0.0.1:8849:8849   # JProfiler
     volumes:
-      - ./wolfia.yaml:/opt/wolfia/wolfia.yaml:ro
+      - ./wolfia-secrets.yaml:/opt/wolfia/wolfia-secrets.yaml:ro
       - ./logs:/opt/wolfia/logs
       - ./logs/gc:/opt/wolfia/logs/gc
     stop_grace_period: 7200s #should really be enough to finish all games
@@ -126,6 +160,26 @@ services:
       - wolfia.jar
 
   # bunch of redirects cause traefik cant do them lol
+  redirect-ideas:
+    image: napstr/docker-nginx-redirect
+    restart: always
+    networks:
+      - traefik
+    expose:
+      - 80
+    labels:
+      - "traefik.docker.network=wolfia_traefik"
+      - "traefik.enable=true"
+      - "traefik.port=80"
+      - "traefik.http.routers.wolfia-redirect-ideas.rule=Host(`bot.${DOMAIN}`) && PathPrefix(`/ideas`)"
+      - "traefik.http.routers.wolfia-redirect-ideas.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wolfia-redirect-ideas.middlewares=whitelist@docker"
+    environment:
+      - SERVER_REDIRECT=feedback.userreport.com
+      - SERVER_REDIRECT_PATH=/01987d31-0d58-48c6-a4d3-96f2ae42eb14
+      - SERVER_REDIRECT_SCHEME=https
+      - SERVER_REDIRECT_CODE=307
+
   redirect-join:
     image: napstr/docker-nginx-redirect
     restart: always
@@ -136,32 +190,12 @@ services:
     labels:
       - "traefik.docker.network=wolfia_traefik"
       - "traefik.enable=true"
-      - "traefik.backend=wolfia-redirect-join"
       - "traefik.port=80"
-      - "traefik.frontend.rule=Host:${DOMAIN};PathPrefix:/join"
+      - "traefik.http.routers.wolfia-redirect-join.rule=Host(`bot.${DOMAIN}`) && PathPrefix(`/join`)"
+      - "traefik.http.routers.wolfia-redirect-join.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wolfia-redirect-join.middlewares=whitelist@docker"
     environment:
       - SERVER_REDIRECT=discord.gg
       - SERVER_REDIRECT_PATH=/nvcfX3q
-      - SERVER_REDIRECT_SCHEME=https
-      - SERVER_REDIRECT_CODE=307
-
-  redirect-invite:
-    image: napstr/docker-nginx-redirect
-    restart: always
-    networks:
-      - traefik
-    expose:
-      - 80
-    labels:
-      - "traefik.docker.network=wolfia_traefik"
-      - "traefik.enable=true"
-      - "traefik.backend=wolfia-redirect-invite"
-      - "traefik.port=80"
-      #      - "traefik.frontend.rule=Host:${DOMAIN};Path:/invite"
-      - "traefik.frontend.rule=Host:${DOMAIN}" #todo catch-all until we have a proper website
-      - "traefik.frontend.priority=1" # lowest
-    environment:
-      - SERVER_REDIRECT=discordapp.com
-      - SERVER_REDIRECT_PATH=/oauth2/authorize?client_id=306583221565521921\&response_type=code\&redirect_uri=https%3A%2F%2Fdiscordapp.com%2Finvite%2FnvcfX3q\&permissions=268787777\&scope=bot
       - SERVER_REDIRECT_SCHEME=https
       - SERVER_REDIRECT_CODE=307

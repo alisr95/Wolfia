@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,15 +17,13 @@
 
 package space.npstr.wolfia.commands;
 
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.TextChannel;
-
+import java.util.Optional;
 import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.TextChannel;
 
 /**
- * Created by napster on 09.12.17.
- * <p>
  * Provides @Nonnull methods for accessing guild entities after an elegant transformation from a CommandContext
  * Same rules as for the CommandContext, don't save these or hold on to these for an extended period of time as it
  * holds direct references to the entities.
@@ -40,16 +38,14 @@ public class GuildCommandContext extends CommandContext {
     public final TextChannel textChannel;
 
 
-    @Nonnull
     @Override
-    public Guild getGuild() {
-        return this.guild;
+    public Optional<Guild> getGuild() {
+        return Optional.of(this.guild);
     }
 
-    @Nonnull
     @Override
-    public Member getMember() {
-        return this.member;
+    public Optional<Member> getMember() {
+        return Optional.of(this.member);
     }
 
     @Nonnull

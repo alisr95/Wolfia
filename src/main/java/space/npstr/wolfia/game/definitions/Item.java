@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,44 +17,44 @@
 
 package space.npstr.wolfia.game.definitions;
 
-import space.npstr.wolfia.commands.CommRegistry;
+import javax.annotation.Nonnull;
+import space.npstr.wolfia.commands.ingame.CheckCommand;
+import space.npstr.wolfia.commands.ingame.OpenPresentCommand;
+import space.npstr.wolfia.commands.ingame.ShootCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.setup.StatusCommand;
 import space.npstr.wolfia.utils.discord.Emojis;
 
-import javax.annotation.Nonnull;
-
 /**
- * Created by napster on 14.12.17.
- * <p>
  * Created for use with the Santa role
  * <p>
  * Type like class to represent a present + it's source. the source should be a userId
  */
 public class Item {
     public final long sourceId;
-    public final Items item;
+    public final ItemType itemType;
 
-    public Item(final long sourceId, @Nonnull final Items item) {
+    public Item(final long sourceId, @Nonnull final ItemType itemType) {
         this.sourceId = sourceId;
-        this.item = item;
+        this.itemType = itemType;
     }
 
-    public enum Items {
+    public enum ItemType {
 
         //may contain other items
         PRESENT(Emojis.PRESENT, String.format("You may open the present in your DMs with `%s`, or shorter `%s`",
-                WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_OPENPRESENT, WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_OPENPRESENT_ALIAS)),
+                WolfiaConfig.DEFAULT_PREFIX + OpenPresentCommand.TRIGGER, WolfiaConfig.DEFAULT_PREFIX + OpenPresentCommand.ALIAS)),
 
 
         //may shoot a player
         GUN(Emojis.GUN, String.format("You may shoot a player during the day in your DMs with `%s`"
                         + "\nSay `%s` to get a list of living players.",
-                WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_SHOOT, WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_STATUS)),
+                WolfiaConfig.DEFAULT_PREFIX + ShootCommand.TRIGGER, WolfiaConfig.DEFAULT_PREFIX + StatusCommand.TRIGGER)),
 
         //may check a player
         MAGNIFIER(Emojis.MAGNIFIER, String.format("You may check a player's alignment during the night in your DMs with `%s`"
                         + "\nSay `%s` to get a list of living players.",
-                WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_CHECK, WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_STATUS)),
+                WolfiaConfig.DEFAULT_PREFIX + CheckCommand.TRIGGER, WolfiaConfig.DEFAULT_PREFIX + StatusCommand.TRIGGER)),
 
         // kills the player holding it
         BOMB(Emojis.BOMB, "Kills you immediately " + Emojis.BOOM),
@@ -71,7 +71,7 @@ public class Item {
         @Nonnull
         public final String explanation;
 
-        Items(@Nonnull final String emoji, @Nonnull final String explanation) {
+        ItemType(@Nonnull final String emoji, @Nonnull final String explanation) {
             this.emoji = emoji;
             this.explanation = explanation;
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,75 +17,67 @@
 
 package space.npstr.wolfia.commands.debug;
 
-import space.npstr.sqlsauce.DatabaseException;
-import space.npstr.wolfia.Launcher;
-import space.npstr.wolfia.Wolfia;
-import space.npstr.wolfia.commands.BaseCommand;
-import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.IOwnerRestricted;
-import space.npstr.wolfia.db.entities.Setup;
-import space.npstr.wolfia.game.definitions.Games;
-import space.npstr.wolfia.utils.discord.Emojis;
-import space.npstr.wolfia.utils.discord.RestActions;
-
+import java.util.Optional;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.annotation.Nonnull;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import net.dv8tion.jda.api.entities.Guild;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import space.npstr.wolfia.Launcher;
+import space.npstr.wolfia.commands.BaseCommand;
+import space.npstr.wolfia.commands.CommandContext;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
+import space.npstr.wolfia.game.tools.ExceptionLoggingExecutor;
+import space.npstr.wolfia.utils.discord.Emojis;
+import space.npstr.wolfia.utils.discord.RestActions;
 
 /**
- * Created by napster on 27.05.17.
- * <p>
- * run js code in the bot
+ * Run js code in the bot.
  */
-public class EvalCommand extends BaseCommand implements IOwnerRestricted {
+@Command
+public class EvalCommand implements BaseCommand, ApplicationContextAware {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EvalCommand.class);
 
-    private Future lastTask;
+    private final ExceptionLoggingExecutor executor;
+    private final GameRegistry gameRegistry;
+    private ApplicationContext applicationContext;
+
+    private Future<?> lastTask;
 
     //Thanks Fred & Dinos!
     private final ScriptEngine engine;
 
-    public EvalCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    public EvalCommand(ExceptionLoggingExecutor executor, GameRegistry gameRegistry) {
+        this.executor = executor;
+        this.gameRegistry = gameRegistry;
         this.engine = new ScriptEngineManager().getEngineByName("nashorn");
         try {
             this.engine.eval("var imports = new JavaImporter("
                     + "java.io"
                     + ",java.lang"
                     + ",java.util"
-                    + ",Packages.space.npstr.wolfia"
-                    + ",Packages.space.npstr.wolfia.charts"
-                    + ",Packages.space.npstr.wolfia.commands"
-                    + ",Packages.space.npstr.wolfia.commands.debug"
-                    + ",Packages.space.npstr.wolfia.commands.game"
-                    + ",Packages.space.npstr.wolfia.commands.ingame"
-                    + ",Packages.space.npstr.wolfia.commands.stats"
-                    + ",Packages.space.npstr.wolfia.commands.util"
-                    + ",Packages.space.npstr.wolfia.db"
-                    + ",Packages.space.npstr.wolfia.db.entities"
-                    + ",Packages.space.npstr.wolfia.db.entities.stats"
-                    + ",Packages.space.npstr.wolfia.db.migrations"
-                    + ",Packages.space.npstr.wolfia.events"
-                    + ",Packages.space.npstr.wolfia.game"
-                    + ",Packages.space.npstr.wolfia.game.definitions"
-                    + ",Packages.space.npstr.wolfia.game.exceptions"
-                    + ",Packages.space.npstr.wolfia.game.mafia"
-                    + ",Packages.space.npstr.wolfia.game.popcorn"
-                    + ",Packages.space.npstr.wolfia.game.tools"
-                    + ",Packages.space.npstr.wolfia.listings"
-                    + ",Packages.space.npstr.wolfia.utils"
-                    + ",Packages.space.npstr.wolfia.utils.discord"
-                    + ",Packages.space.npstr.wolfia.utils.log"
                     + ");");
 
         } catch (final ScriptException ex) {
             log.error("Failed to init eval command", ex);
         }
+    }
+
+    @Override
+    public void setApplicationContext(@Nonnull ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
+
+    @Override
+    public String getTrigger() {
+        return "eval";
     }
 
     @Nonnull
@@ -97,7 +89,7 @@ public class EvalCommand extends BaseCommand implements IOwnerRestricted {
     }
 
     @Override
-    public boolean execute(@Nonnull final CommandContext context) throws DatabaseException {
+    public boolean execute(@Nonnull final CommandContext context) {
         final long started = System.currentTimeMillis();
 
         String source = context.rawArgs;
@@ -132,15 +124,16 @@ public class EvalCommand extends BaseCommand implements IOwnerRestricted {
         this.engine.put("channel", context.channel);
         this.engine.put("author", context.invoker);
         this.engine.put("bot", context.invoker.getJDA().getSelfUser());
-        this.engine.put("member", context.getGuild() != null ? context.getGuild().getSelfMember() : null);
+        Optional<Guild> guild = context.getGuild();
+        this.engine.put("member", guild.map(Guild::getSelfMember).orElse(null));
         this.engine.put("message", context.msg);
-        this.engine.put("guild", context.getGuild());
-        this.engine.put("game", Games.get(context.channel.getIdLong()));
-        this.engine.put("setup", Launcher.getBotContext().getDatabase().getWrapper().getOrCreate(Setup.key(context.channel.getIdLong())));
-        this.engine.put("games", Games.class);//access the static methods like this from eval: games.static.myStaticMethod()
+        this.engine.put("guild", guild.orElse(null));
+        this.engine.put("game", this.gameRegistry.get(context.channel.getIdLong()));
+        this.engine.put("games", this.gameRegistry);
         this.engine.put("db", Launcher.getBotContext().getDatabase());
+        this.engine.put("app", this.applicationContext);
 
-        final Future<?> future = Wolfia.executor.submit(() -> {
+        final Future<?> future = this.executor.submit(() -> {
 
             final Object out;
             try {
@@ -151,7 +144,7 @@ public class EvalCommand extends BaseCommand implements IOwnerRestricted {
 
             } catch (final Exception ex) {
                 context.msg.addReaction(Emojis.X).queue(null, RestActions.defaultOnFail());
-                context.reply(String.format("`%s`\n\n`%sms`",
+                context.reply(String.format("`%s`%n%n`%sms`",
                         ex.getMessage(), System.currentTimeMillis() - started));
                 log.info("Error occurred in eval", ex);
                 return;
@@ -166,7 +159,7 @@ public class EvalCommand extends BaseCommand implements IOwnerRestricted {
                 output = "EvalCommand: `" + out.toString() + "`";
             }
             context.msg.addReaction(Emojis.OK_HAND).queue(null, RestActions.defaultOnFail());
-            context.reply(String.format("```java\n%s```\n%s\n`%sms`",
+            context.reply(String.format("```java%n%s```%n%s%n`%sms`",
                     finalSource, output, System.currentTimeMillis() - started));
 
         });
@@ -183,7 +176,7 @@ public class EvalCommand extends BaseCommand implements IOwnerRestricted {
                     future.cancel(true);
                     context.reply("Task exceeded time limit of " + timeOut + " seconds.");
                 } catch (final Exception ex) {
-                    context.reply(String.format("`%s`\n\n`%sms`",
+                    context.reply(String.format("`%s`%n%n`%sms`",
                             ex.getMessage(), System.currentTimeMillis() - started));
                 }
             }

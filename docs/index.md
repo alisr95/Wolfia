@@ -3,10 +3,10 @@ layout: default
 ---
 
 {: .invite-image.center}
-[![Invite the Wolfia bot to your server.](http://i.imgur.com/qEWSU6D.png)](https://discordapp.com/oauth2/authorize?client_id=306583221565521921&response_type=code&redirect_uri=https%3A%2F%2Fdiscordapp.com%2Finvite%2FnvcfX3q&permissions=268787777&scope=bot)
+[![Invite the Wolfia bot to your server.](http://i.imgur.com/qEWSU6D.png)](https://bot.wolfia.party/invite)
 
 {:.center}
-[Click the banner above to invite Wolfia](https://discordapp.com/oauth2/authorize?client_id=306583221565521921&response_type=code&redirect_uri=https%3A%2F%2Fdiscordapp.com%2Finvite%2FnvcfX3q&permissions=268787777&scope=bot)
+[Click the banner above to invite Wolfia](https://bot.wolfia.party/invite)
 
 * * *
 
@@ -22,7 +22,7 @@ layout: default
         </ul>
         <p>
             <a href="https://discord.gg/nvcfX3q">
-                <img src="https://discordapp.com/api/guilds/315944983754571796/embed.png?style=banner2" alt="Join Wolfia Lounge">
+                <img src="https://discord.com/api/guilds/315944983754571796/embed.png?style=banner2" alt="Join Wolfia Lounge">
             </a>
         </p>
     </div>
@@ -37,16 +37,19 @@ layout: default
 
 * * *
 
-# β version
+# Wolfia setup
 
-Wolfia is currently in **beta** status, which means the following:
-- A small selection of games and modes is supported. More stuff is being worked on.
-- Bugs during games might happen. Please drop by the Wolfia Lounge to help sort these out.
-- Data and commands might change without notice.
-- Output and formatting of messages might look a bit rough.
+- Invite Wolfia to your server (see big button above).
+- Revoke Wolfia's write permission on channels where games should not be played.
+- Set your channel settings: `tag cooldown` is how often someone can call the tag list, and `auto-out` will automactally remove inactive players from the sign-up list.
+- Set your game settings. See below for details on each game and mode.
+- Start playing!
 
-Uptime over last 7 days:  
-[![Uptime Robot ratio (7 days)](https://img.shields.io/uptimerobot/ratio/7/m779169786-261e58b3e3675e8e3e5fdac8.svg?style=flat-square)]()
+A few notes:
+- Wolfia automatically mutes and unmutes players as necessary to prevent non-players and dead players from talking during a game.
+- Wolfia also runs private servers just for the Wolves/Mafia. Players receiving one of those roles will also get an invite to such a server in their role PM at the start of the game. You do not need to create any channels for Wolves/Mafia.
+- `Access role` is for playing on private channels. You do not need to configure this unless Wolfia asks you to.
+
 
 * * *
 
@@ -57,10 +60,10 @@ Uptime over last 7 days:
 Command    | What it does                                                 | Example usage / aliases
 ---------- | ------------------------------------------------------------ | -------------
 `w.in`     | sign up for a game                                           | `w.in`
-`w.out`    | drop from the sign up list; moderators can out other players | `w.out` `w.out @player`
+`w.out`    | drop from the sign up list; moderators can out other players | `w.out` `w.out @player`
 `w.setup`  | set up the game in the current channel                       | `w.setup daylength 5` `w.setup game mafia` `w.setup mode classic`
 `w.start`  | start a game                                                 | `w.start`
-`w.rolepm` | ask the bot to resend you your rolepm for the ongoing game   | `w.rpm`
+`w.rolepm` | ask the bot to resend you your rolepm for the ongoing game   | `w.rpm`
 `w.status` | show the current status of an ongoing game or sign ups       | `w.st`
 
 
@@ -68,13 +71,13 @@ Command    | What it does                                                 | Exam
 
 Command             | What it does                                        | Example usage / aliases
 ------------------- | --------------------------------------------------- | -------------
-`w.check`           | check a players alignment                           | `w.check 6`
-`w.shoot`           | shoot another player                                | `w.s @player`
+`w.check`           | check a players alignment                           | `w.check 6`
+`w.shoot`           | shoot another player                                | `w.s @player`
 `w.unvote`          | unvote                                              | `w.u`
-`w.vote`            | vote a player for lynch                             | `w.v @player`
+`w.vote`            | vote a player for lynch                             | `w.v @player`
 `w.votecount`       | post the current votecount                          | `w.vc`
-`w.nightkill`       | vote a player for nightkill (in mafia chat only)    | `w.nk @player`
-`w.hohoho`          | give a player a present (xmas mode only)            | `w.ho 5`
+`w.nightkill`       | vote a player for nightkill (in mafia chat only)    | `w.nk @player`
+`w.hohoho`          | give a player a present (xmas mode only)            | `w.ho 5`
 `w.items`           | list the items that you own (xmas mode only)        | `w.items`
 `w.openpresent`     | open a present that you received (xmas mode only)   | `w.op`
 
@@ -83,7 +86,7 @@ Command             | What it does                                        | Exam
 
 Command             | What it does                                        | Example usage / aliases
 ------------------- | --------------------------------------------------- | -------------
-`w.channelsettings` | set up settings for this channel                    | `w.cs accessrole Mafiaplayer` `w.channelsettings tagcooldown 10`
+`w.channelsettings` | set up settings for this channel                    | `w.cs accessrole Mafiaplayer` `w.channelsettings tagcooldown 10` `w.cs auto-out on`
 
 ### Statistics
 
@@ -99,6 +102,7 @@ Command             | What it does                                        | Exam
 
 Command             | What it does                                        | Example usage / aliases
 ------------------- | --------------------------------------------------- | -------------
+`w.auth`            | authorize to be added to wolf chat automatically    | `w.auth`
 `w.commands`        | show a list of all available commands               | `w.comms`
 `w.help`            | send some help your way                             | `w.help`
 `w.info`            | show some general information about Wolfia          | `w.info`
@@ -195,6 +199,19 @@ Nevertheless, and also for the control freaks among us, here is a comprehensive 
 
 * * *
 
+# β version
+
+Wolfia is currently in **beta** status, which means the following:
+- A small selection of games and modes is supported. More stuff is being worked on.
+- Bugs during games might happen. Please drop by the Wolfia Lounge to help sort these out.
+- Data and commands might change without notice.
+- Output and formatting of messages might look a bit rough.
+
+Uptime over last 7 days:  
+[![Uptime Robot ratio (7 days)](https://img.shields.io/uptimerobot/ratio/7/m785556907-c9756379df3db09306af6eda.svg?style=flat-square)]()
+
+* * *
+
 # Special mentions:
 - Written in Java using the excellent [JDA (Java Discord API)](https://github.com/DV8FromTheWorld/JDA). They maintain a super helpful crowd in their Discord guild.
 - Several functions and architectural decisions inspired by and/or plain copy pasta'd from [Frederikam's](https://frederikam.com/) music bot [FredBoat](https://fredboat.com/).
@@ -203,13 +220,13 @@ Nevertheless, and also for the control freaks among us, here is a comprehensive 
 * * *
 
 {: .center}
-Coded with lots of ![](https://canary.discordapp.com/assets/25c09e6fde32411da2b0da00f5cb9c84.svg){:height="15" width="15"} by [Napster](https://npstr.space/)
+Coded with lots of ![](https://discord.com/assets/25c09e6fde32411da2b0da00f5cb9c84.svg){:height="15" width="15"} by [Napster](https://npstr.space/)
 
 
-[w]:https://canary.discordapp.com/assets/04ff67f3321f9158ad57242a5412782b.svg
-[v]:https://canary.discordapp.com/assets/984390b3eefc024ea770ccbfcfbdc4e2.svg
-[m]:https://canary.discordapp.com/assets/a39460d0f6baa307386a4bb2984de363.svg
-[t]:https://canary.discordapp.com/assets/984390b3eefc024ea770ccbfcfbdc4e2.svg
-[gun]:https://canary.discordapp.com/assets/3071dbc60204c84ca0cf423b8b08a204.svg
-[cop]:https://canary.discordapp.com/assets/3896096ba07324c04ed0fe7e1acc3643.svg
-[santa]:https://canary.discordapp.com/assets/37017a416c2a6ab030f0de3db9f6e73e.svg
+[w]:https://discord.com/assets/04ff67f3321f9158ad57242a5412782b.svg
+[v]:https://discord.com/assets/984390b3eefc024ea770ccbfcfbdc4e2.svg
+[m]:https://discord.com/assets/a39460d0f6baa307386a4bb2984de363.svg
+[t]:https://discord.com/assets/984390b3eefc024ea770ccbfcfbdc4e2.svg
+[gun]:https://discord.com/assets/3071dbc60204c84ca0cf423b8b08a204.svg
+[cop]:https://discord.com/assets/3896096ba07324c04ed0fe7e1acc3643.svg
+[santa]:https://discord.com/assets/37017a416c2a6ab030f0de3db9f6e73e.svg

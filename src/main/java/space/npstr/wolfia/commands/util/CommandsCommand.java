@@ -1,19 +1,70 @@
+/*
+ * Copyright (C) 2016-2020 the original author or authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package space.npstr.wolfia.commands.util;
 
-import net.dv8tion.jda.core.EmbedBuilder;
+import java.util.List;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.EmbedBuilder;
 import space.npstr.wolfia.App;
 import space.npstr.wolfia.commands.BaseCommand;
-import space.npstr.wolfia.commands.CommRegistry;
 import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.Context;
+import space.npstr.wolfia.commands.MessageContext;
+import space.npstr.wolfia.commands.PublicCommand;
+import space.npstr.wolfia.commands.game.RolePmCommand;
+import space.npstr.wolfia.commands.game.StartCommand;
+import space.npstr.wolfia.commands.ingame.CheckCommand;
+import space.npstr.wolfia.commands.ingame.HohohoCommand;
+import space.npstr.wolfia.commands.ingame.ItemsCommand;
+import space.npstr.wolfia.commands.ingame.NightkillCommand;
+import space.npstr.wolfia.commands.ingame.OpenPresentCommand;
+import space.npstr.wolfia.commands.ingame.ShootCommand;
+import space.npstr.wolfia.commands.ingame.UnvoteCommand;
+import space.npstr.wolfia.commands.ingame.VoteCommand;
+import space.npstr.wolfia.commands.ingame.VoteCountCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.oauth2.AuthCommand;
+import space.npstr.wolfia.domain.privacy.PrivacyCommand;
+import space.npstr.wolfia.domain.settings.ChannelSettingsCommand;
+import space.npstr.wolfia.domain.setup.InCommand;
+import space.npstr.wolfia.domain.setup.OutCommand;
+import space.npstr.wolfia.domain.setup.SetupCommand;
+import space.npstr.wolfia.domain.setup.StatusCommand;
+import space.npstr.wolfia.domain.stats.BotStatsCommand;
+import space.npstr.wolfia.domain.stats.GuildStatsCommand;
+import space.npstr.wolfia.domain.stats.ReplayCommand;
+import space.npstr.wolfia.domain.stats.UserStatsCommand;
 
-import javax.annotation.Nonnull;
+@Command
+public class CommandsCommand implements BaseCommand, PublicCommand {
 
-public class CommandsCommand extends BaseCommand {
+    public static final String TRIGGER = "commands";
 
-    public CommandsCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    private static final String XMAS_MODE_ONLY = " _(xmas mode only)_";
+
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
+    }
+
+    @Override
+    public List<String> getAliases() {
+        return List.of("comms");
     }
 
     @Nonnull
@@ -27,50 +78,52 @@ public class CommandsCommand extends BaseCommand {
     public boolean execute(@Nonnull final CommandContext context) {
         //@formatter:off
         final String gameCommands = ""
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_IN + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_OUT + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_SETUP + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_START + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_ROLEPM + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_STATUS + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + InCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + OutCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + SetupCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + StartCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + RolePmCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + StatusCommand.TRIGGER + "\n"
                 ;
 
         final String ingameCommands = ""
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_SHOOT + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_VOTE + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_UNVOTE + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_VOTECOUNT + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_NIGHTKILL + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_CHECK + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_HOHOHO + " _(xmas mode only)_\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_ITEMS + " _(xmas mode only)_\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_OPENPRESENT + " _(xmas mode only)_\n"
+                + WolfiaConfig.DEFAULT_PREFIX + ShootCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + VoteCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + UnvoteCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + VoteCountCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + NightkillCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + CheckCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + HohohoCommand.TRIGGER + XMAS_MODE_ONLY + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + ItemsCommand.TRIGGER + XMAS_MODE_ONLY + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + OpenPresentCommand.TRIGGER + XMAS_MODE_ONLY + "\n"
                 ;
 
         final String settingsCommands =
-                  WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_CHANNELSETTINGS
+                  WolfiaConfig.DEFAULT_PREFIX + ChannelSettingsCommand.TRIGGER
                 ;
 
         final String statsCommands = ""
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_USERSTATS + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_GUILDSTATS + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_BOTSTATS + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + UserStatsCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + GuildStatsCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + BotStatsCommand.TRIGGER + "\n"
                 ;
 
         final String otherCommands = ""
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_COMMANDS + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_HELP + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_INFO + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_INVITE + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_RANK + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_REPLAY + "\n"
-                + WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_TAG + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + AuthCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + CommandsCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + HelpCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + InfoCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + InviteCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + PrivacyCommand.TRIGGER  + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + RankCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + ReplayCommand.TRIGGER + "\n"
+                + WolfiaConfig.DEFAULT_PREFIX + TagCommand.TRIGGER + "\n"
                 ;
         //@formatter:on
 
 
         final String link = App.DOCS_LINK + "#commands";
-        final EmbedBuilder eb = Context.getDefaultEmbedBuilder()
+        final EmbedBuilder eb = MessageContext.getDefaultEmbedBuilder()
                 .setTitle("Wolfia commands", link)
                 .addField("Starting a game", gameCommands, true)
                 .addField("Game actions", ingameCommands, true)

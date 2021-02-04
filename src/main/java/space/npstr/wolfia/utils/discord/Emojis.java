@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -18,13 +18,10 @@
 package space.npstr.wolfia.utils.discord;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * Created by napster on 21.05.17.
- * <p>
- * contains various emojis used in the bot
+ * Contains various emojis used in the bot
  */
 public class Emojis {
 
@@ -33,11 +30,8 @@ public class Emojis {
     //standard unicode based ones
     public static final String GUN = "🔫";
     public static final String WOLF = "🐺";
-    public static final String POPCORN = "🍿";
     public static final String COFFIN = "⚰";
     public static final String SKULL = "💀";
-    public static final String HOG = "🐷";
-    public static final String POTATO = "🥔";
     public static final String VIDEO_GAME = "🎮";
     public static final String END = "🔚";
     public static final String COWBOY = "🤠";
@@ -45,17 +39,19 @@ public class Emojis {
     public static final String BOOM = "💥";
     public static final String OK_HAND = "👌";
     public static final String WINK = "😉";
+    public static final String ONE_HUNDRED = "💯";
+    public static final String SLEEP = "💤";
+    public static final String STOP = "🛑";
+    public static final String TOOLS = "🛠️";
+    public static final String CHECKERED_FLAG = "🏁";
 
     public static final String SUNNY = "☀";
     public static final String FULL_MOON = "🌕";
     public static final String CITY_SUNSET_SUNRISE = "🌇";
 
-    public static final String QUESTION = "❓";
     public static final String X = "❌";
-    public static final String ANGER = "💢";
     public static final String CHECK = "✅";
-    public static final String LOADING = "🔄";
-    public static final String DOOR = "🚪";
+    public static final String WARN = "⚠️";
 
     public static final String BALLOT_BOX = "🗳";
     public static final String FIRE = "🔥";
@@ -80,8 +76,8 @@ public class Emojis {
     public static final String NUMBER_9 = "9⃣";
     public static final String NUMBER_10 = "🔟";
 
-    public static final List<String> NUMBERS = Collections.unmodifiableList(Arrays.asList(NUMBER_0, NUMBER_1, NUMBER_2,
-            NUMBER_3, NUMBER_4, NUMBER_5, NUMBER_6, NUMBER_7, NUMBER_8, NUMBER_9, NUMBER_10));
+    public static final List<String> NUMBERS = List.of(NUMBER_0, NUMBER_1, NUMBER_2, NUMBER_3, NUMBER_4,
+            NUMBER_5, NUMBER_6, NUMBER_7, NUMBER_8, NUMBER_9, NUMBER_10);
 
     public static final String LETTER_A = "🇦";
     public static final String LETTER_B = "🇧";
@@ -110,10 +106,9 @@ public class Emojis {
     public static final String LETTER_Y = "🇾";
     public static final String LETTER_Z = "🇿";
 
-    public static final List<String> LETTERS = Collections.unmodifiableList(Arrays.asList(LETTER_A, LETTER_B, LETTER_C,
-            LETTER_D, LETTER_E, LETTER_F, LETTER_G, LETTER_H, LETTER_I, LETTER_J, LETTER_K, LETTER_L, LETTER_M,
-            LETTER_N, LETTER_O, LETTER_P, LETTER_Q, LETTER_R, LETTER_S, LETTER_T, LETTER_U, LETTER_V, LETTER_W,
-            LETTER_X, LETTER_Y, LETTER_Z));
+    public static final List<String> LETTERS = List.of(LETTER_A, LETTER_B, LETTER_C, LETTER_D, LETTER_E, LETTER_F,
+            LETTER_G, LETTER_H, LETTER_I, LETTER_J, LETTER_K, LETTER_L, LETTER_M, LETTER_N, LETTER_O, LETTER_P,
+            LETTER_Q, LETTER_R, LETTER_S, LETTER_T, LETTER_U, LETTER_V, LETTER_W, LETTER_X, LETTER_Y, LETTER_Z);
 
     //custom ones, currently hosted in the Wolfia Lounge
     public static final String EEK = "<:eek:318452576850804748>";
@@ -138,4 +133,6 @@ public class Emojis {
         });
         return result.toString();
     }
+
+    private Emojis() {}
 }

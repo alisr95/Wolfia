@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,42 +17,27 @@
 
 package space.npstr.wolfia.game.tools;
 
-import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.entities.MessageEmbed;
-import space.npstr.wolfia.commands.Context;
-
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.entities.MessageEmbed;
+import space.npstr.wolfia.commands.MessageContext;
 
 /**
- * Created by napster on 27.07.17.
- * <p>
  * An embed builder that accepts ChunkingFields which respect value length and chunk themselves up into acceptable lengths
  */
 public class NiceEmbedBuilder extends EmbedBuilder {
-
-    private static final ThreadLocal<NiceEmbedBuilder> threadLocalNiceEmbedBuilder = ThreadLocal.withInitial(NiceEmbedBuilder::new);
 
     /**
      * @return a general purpose preformatted nice builder for embeds
      */
     @Nonnull
     public static NiceEmbedBuilder defaultBuilder() {
-        final NiceEmbedBuilder neb = builder();
-        neb.setColor(Context.BLACKIA);
+        final NiceEmbedBuilder neb = new NiceEmbedBuilder();
+        neb.setColor(MessageContext.BLACKIA);
         return neb;
-    }
-
-    @Nonnull
-    public static NiceEmbedBuilder builder() {
-        final NiceEmbedBuilder neb = threadLocalNiceEmbedBuilder.get();
-        neb.clear();
-        return neb;
-    }
-
-    private NiceEmbedBuilder() {
     }
 
     //default trim is true
@@ -87,7 +72,7 @@ public class NiceEmbedBuilder extends EmbedBuilder {
         public ChunkingField(final String name, final boolean inline) {
             this.name = name;
             this.inline = inline;
-            this.current = new StringBuilder().append("");
+            this.current = new StringBuilder();
             this.content.add(this.current);
         }
 

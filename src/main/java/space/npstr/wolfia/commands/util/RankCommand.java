@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -18,33 +18,35 @@
 package space.npstr.wolfia.commands.util;
 
 
-import net.dv8tion.jda.core.entities.Role;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.entities.Role;
 import space.npstr.wolfia.App;
 import space.npstr.wolfia.commands.BaseCommand;
-import space.npstr.wolfia.commands.CommRegistry;
 import space.npstr.wolfia.commands.CommandContext;
 import space.npstr.wolfia.commands.GuildCommandContext;
+import space.npstr.wolfia.commands.PublicCommand;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.Command;
 import space.npstr.wolfia.events.WolfiaGuildListener;
 import space.npstr.wolfia.utils.discord.TextchatUtils;
 
-import javax.annotation.Nonnull;
-
 /**
- * Created by napster on 07.01.18.
- * <p>
  * Allows users to add / remove special roles in the Wolfia Lounge
  */
-public class RankCommand extends BaseCommand {
+@Command
+public class RankCommand implements BaseCommand, PublicCommand {
+
+    public static final String TRIGGER = "rank";
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RankCommand.class);
 
-    public RankCommand(@Nonnull final String name, @Nonnull final String... aliases) {
-        super(name, aliases);
+    @Override
+    public String getTrigger() {
+        return TRIGGER;
     }
 
     @Override
-    protected boolean execute(@Nonnull final CommandContext commandContext) {
+    public boolean execute(@Nonnull final CommandContext commandContext) {
         final GuildCommandContext context = commandContext.requireGuild();
         if (context == null) {
             return false;
@@ -52,7 +54,7 @@ public class RankCommand extends BaseCommand {
 
         if (context.guild.getIdLong() != App.WOLFIA_LOUNGE_ID) {
             context.reply(String.format("This command is restricted to the official Wolfia Lounge. Say `%s` to get invited.",
-                    WolfiaConfig.DEFAULT_PREFIX + CommRegistry.COMM_TRIGGER_INVITE));
+                    WolfiaConfig.DEFAULT_PREFIX + InviteCommand.TRIGGER));
             return false;
         }
 
@@ -62,13 +64,7 @@ public class RankCommand extends BaseCommand {
         }
 
         final Role role;
-        if (TextchatUtils.isSimilarLower("Announcements", context.rawArgs)) {
-            role = context.guild.getRoleById(WolfiaGuildListener.ANNOUNCEMENTS_ROLE_ID);
-            if (role == null) {
-                log.warn("Did the Announcements role disappear in the Wolfia Lounge?");
-                return false;
-            }
-        } else if (TextchatUtils.isSimilarLower("AlphaWolves", context.rawArgs)) {
+        if (TextchatUtils.isSimilarLower("AlphaWolves", context.rawArgs)) {
             role = context.guild.getRoleById(WolfiaGuildListener.ALPHAWOLVES_ROLE_ID);
             if (role == null) {
                 log.warn("Did the AlphaWolves role disappear in the Wolfia Lounge?");
@@ -80,10 +76,10 @@ public class RankCommand extends BaseCommand {
         }
 
         if (context.member.getRoles().contains(role)) {
-            context.guild.getController().removeSingleRoleFromMember(context.member, role).queue();
+            context.guild.removeRoleFromMember(context.member, role).queue();
             context.replyWithName(String.format("removed role `%s` from you.", role.getName()));
         } else {
-            context.guild.getController().addSingleRoleToMember(context.member, role).queue();
+            context.guild.addRoleToMember(context.member, role).queue();
             context.replyWithName(String.format("added role `%s` to you.", role.getName()));
         }
         return true;
@@ -91,8 +87,8 @@ public class RankCommand extends BaseCommand {
 
     @Nonnull
     @Override
-    protected String help() {
-        return invocation() + " AlphaWolves OR Announcements"
+    public String help() {
+        return invocation() + " AlphaWolves"
                 + "\n#Add or remove special roles of the official Wolfia Lounge for you.";
     }
 }

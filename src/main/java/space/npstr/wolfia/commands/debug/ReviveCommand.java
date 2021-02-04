@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,35 +17,34 @@
 
 package space.npstr.wolfia.commands.debug;
 
-import net.dv8tion.jda.core.JDA;
-import space.npstr.sqlsauce.DatabaseException;
-import space.npstr.wolfia.Wolfia;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.sharding.ShardManager;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.IOwnerRestricted;
 import space.npstr.wolfia.config.properties.WolfiaConfig;
+import space.npstr.wolfia.domain.Command;
 
-import javax.annotation.Nonnull;
+import static java.util.Objects.requireNonNull;
 
-/**
- * Created by napster on 19.11.17.
- */
-public class ReviveCommand extends BaseCommand implements IOwnerRestricted {
+@Command
+public class ReviveCommand implements BaseCommand {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReviveCommand.class);
 
-    public ReviveCommand(@Nonnull final String trigger, @Nonnull final String... aliases) {
-        super(trigger, aliases);
+    @Override
+    public String getTrigger() {
+        return "revive";
     }
 
     @Nonnull
     @Override
-    protected String help() {
+    public String help() {
         return "Revive a shard by id.";
     }
 
     @Override
-    public boolean execute(@Nonnull final CommandContext context) throws DatabaseException {
+    public boolean execute(@Nonnull final CommandContext context) {
         if (!context.hasArguments()) {
             context.reply("No shard id provided! Say `" + WolfiaConfig.DEFAULT_PREFIX + "revive 0` for example.");
             return false;
@@ -60,12 +59,13 @@ public class ReviveCommand extends BaseCommand implements IOwnerRestricted {
             return false;
         }
 
-        final JDA jda = Wolfia.getShardManager().getShardById(shardId);
+        ShardManager shardManager = context.getJda().getShardManager();
+        final JDA jda = requireNonNull(shardManager).getShardById(shardId);
         if (jda == null) {
             context.reply("No shard with id " + shardId + " found.");
             return false;
         }
-        Wolfia.getShardManager().restart(shardId);
+        shardManager.restart(shardId);
         log.info("Reviving shard {}", shardId);
         context.reply("Reviving shard  " + shardId);
         return true;

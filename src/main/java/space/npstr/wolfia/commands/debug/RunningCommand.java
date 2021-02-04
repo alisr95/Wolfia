@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Dennis Neufeld
+ * Copyright (C) 2016-2020 the original author or authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -17,30 +17,36 @@
 
 package space.npstr.wolfia.commands.debug;
 
-import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.TextChannel;
-import space.npstr.wolfia.Wolfia;
+import java.util.Map;
+import javax.annotation.Nonnull;
+import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.sharding.ShardManager;
 import space.npstr.wolfia.commands.BaseCommand;
 import space.npstr.wolfia.commands.CommandContext;
-import space.npstr.wolfia.commands.IOwnerRestricted;
+import space.npstr.wolfia.domain.Command;
+import space.npstr.wolfia.domain.game.GameRegistry;
 import space.npstr.wolfia.game.Game;
-import space.npstr.wolfia.game.definitions.Games;
-import space.npstr.wolfia.game.exceptions.IllegalGameStateException;
 import space.npstr.wolfia.utils.discord.TextchatUtils;
 
-import javax.annotation.Nonnull;
-import java.util.Map;
+import static java.util.Objects.requireNonNull;
 
 /**
- * Created by napster on 24.07.17.
- * <p>
  * List running games
  */
-public class RunningCommand extends BaseCommand implements IOwnerRestricted {
+@Command
+public class RunningCommand implements BaseCommand {
 
-    public RunningCommand(final String trigger, final String... aliases) {
-        super(trigger, aliases);
+    private final GameRegistry gameRegistry;
+
+    public RunningCommand(GameRegistry gameRegistry) {
+        this.gameRegistry = gameRegistry;
+    }
+
+    @Override
+    public String getTrigger() {
+        return "running";
     }
 
     @Nonnull
@@ -50,20 +56,21 @@ public class RunningCommand extends BaseCommand implements IOwnerRestricted {
     }
 
     @Override
-    public boolean execute(@Nonnull final CommandContext context) throws IllegalGameStateException {
+    public boolean execute(@Nonnull final CommandContext context) {
 
-        final Map<Long, Game> games = Games.getAll();
+        final Map<Long, Game> games = this.gameRegistry.getAll();
         for (final Game game : games.values()) {
             final EmbedBuilder eb = game.getStatus();
             eb.addBlankField(false);
 
-            final TextChannel channel = Wolfia.getTextChannelById(game.getChannelId());
+            ShardManager shardManager = context.getJda().getShardManager();
+            final TextChannel channel = requireNonNull(shardManager).getTextChannelById(game.getChannelId());
             String guildName = "Guild not found";
             String channelName = "Channel not found";
             if (channel != null) {
                 channelName = "#" + channel.getName();
                 final Guild guild = channel.getGuild();
-                if (guild != null) guildName = guild.getName();
+                guildName = guild.getName();
             }
             eb.addField("Guild & Channel", guildName + "\n" + channelName + "\n" + game.getChannelId(), true);
 

@@ -1,0 +1,37 @@
+apply plugin: "org.jetbrains.kotlin.jvm"
+apply plugin: "com.adarshr.test-logger"
+apply plugin: "info.solidsoft.pitest"
+
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:$kotlinVersion"
+    testRuntime "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
+
+}
+
+test {
+    useJUnitPlatform()
+}
+
+testlogger {
+    theme 'mocha'
+}
+
+pitest {
+    pitestVersion = "$pitestVersion"
+    testPlugin = 'junit5'
+    timestampedReports = false
+    threads = 4
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "$kotlinJvmTarget"
+    }
+}
+compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "$kotlinJvmTarget"
+    }
+}
